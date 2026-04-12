@@ -1,0 +1,639 @@
+// Version: 1.0.0
+type ArtworkLayerId__260885812 = Nat;
+type ArtworkLayer__311643346 =
+  {
+    id : ArtworkLayerId__260885812;
+    layer_number : Nat;
+    name : Text;
+    object_key : Text;
+    uploaded_at : Timestamp__301639476
+  };
+type BatchGiftPack__69244440 =
+  {
+    claim_token_id : ClaimTokenId__186876841;
+    created_at : Timestamp__301639476;
+    creator : Principal;
+    id : Text;
+    plant_ids : [PlantId__287120832];
+    var redeemed : Bool;
+    var redeemed_by : ?Principal
+  };
+type ClaimTokenId__186876841 = Text;
+type ClaimToken__351520388 =
+  {
+    claim_data : Text;
+    created_at : Timestamp__301639476;
+    id : ClaimTokenId__186876841;
+    plant_id : PlantId__287120832;
+    rarity_tier : RarityTier__632493009;
+    var redeemed_at : ?Timestamp__301639476;
+    var redeemed_by : ?Principal
+  };
+type CommentId__821569710 = Nat;
+type Comment__775004821 =
+  {
+    author : Principal;
+    content : Text;
+    created_at : Timestamp__301639476;
+    id : CommentId__821569710;
+    post_id : PostId__861309770
+  };
+type ContainerSize__870711714 =
+  {#Gal1; #Gal3; #Gal5; #InGround; #Other : Text; #Oz16};
+type Data__159895909<T> = {var count : Nat__490723111; elements : [var ?T]};
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type EXTMetadata__38133320 =
+  {
+    minted_at : Timestamp__301639476;
+    properties : [(Text, Text)];
+    tokenIdentifier : Text
+  };
+type FeedingId__957947504 = Nat;
+type Feeding__897304207 =
+  {
+    date : Timestamp__301639476;
+    dosage_amount : Text;
+    id : FeedingId__957947504;
+    var notes : ?Text;
+    nutrient_type : Text;
+    plant_id : PlantId__287120832;
+    product_name : Text
+  };
+type ICRC37Metadata__273784523 =
+  {
+    attributes : [(Text, Text)];
+    image_key : ?Text;
+    minted_at : Timestamp__301639476;
+    plant_id : PlantId__287120832;
+    stage : PlantStage__144234446;
+    token_id : Text;
+    variety : Text
+  };
+type Internal__667636161<T> =
+  {children : [var ?Node__92254746<T>]; data : Data__159895909<T>};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type InventoryCategory__109365326 =
+  {#Gal1; #Gal3; #Gal5; #InGround; #OtherSize : Text; #Oz16};
+type Leaf__520550824<T> = {data : Data__159895909<T>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type LifecycleUpgradeEvent__340101678 =
+  {
+    new_nft_id : Text;
+    new_stage : Text;
+    old_nft_id : ?Text;
+    old_stage : Text;
+    plant_id : PlantId__287120832;
+    upgraded_at : Timestamp__301639476
+  };
+type List__415060402<T> = List__790383201<T>;
+type List__790383201<T> =
+  {
+    var blockIndex : Nat__490723111;
+    var blocks : [var [var ?T]];
+    var elementIndex : Nat__490723111
+  };
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type MembershipNFT__773042226 =
+  {
+    id : Nat;
+    var is_founder : Bool;
+    issued_at : Timestamp__301639476;
+    var layer_combination : [Nat];
+    var nft_id : ?Text;
+    nft_standard : {#EXT; #Hedera; #ICRC37};
+    owner : Principal;
+    var rarity_tier : ?RarityTier__632493009;
+    tier : MembershipTier__944715395
+  };
+type MembershipTier__944715395 = {#Premium; #Standard};
+type NFTStandard__155758646 = {#EXT; #Hedera; #ICRC37};
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type Node__92254746<T> =
+  {#internal : Internal__667636161<T>; #leaf : Leaf__520550824<T>};
+type OfferAction__88803289 =
+  {#Accepted; #Cancelled; #Countered; #Rejected; #Submitted};
+type OfferHistoryEntry__507909897 =
+  {
+    action : OfferAction__88803289;
+    amount : Nat;
+    by : Principal;
+    timestamp : Timestamp__301639476;
+    token : OfferToken__43238315
+  };
+type OfferStatus__314966347 =
+  {#Accepted; #Cancelled; #Countered; #Pending; #Rejected};
+type OfferToken__43238315 = {#ICP; #ckBTC; #ckETH; #ckUSDC; #ckUSDT};
+type Offer__448706843 =
+  {
+    buyer : Principal;
+    created_at : Timestamp__301639476;
+    history : [OfferHistoryEntry__507909897];
+    icp_equivalent : Nat;
+    id : Text;
+    nft_id : Text;
+    offered_amount : Nat;
+    offered_token : OfferToken__43238315;
+    seller : Principal;
+    status : OfferStatus__314966347;
+    updated_at : Timestamp__301639476
+  };
+type OracleToken__903776040 = {#ICP; #ckBTC; #ckETH; #ckUSDC; #ckUSDT};
+type OrderId__197865225 = Nat;
+type OrderItem__1012446955 =
+  {
+    plant_id : ?PlantId__287120832;
+    price_cents : Nat;
+    product_id : ProductId__160010635;
+    quantity : Nat
+  };
+type OrderStatus__352169100 = {#Cancelled; #Pending; #PickedUp; #Shipped};
+type Order__308187248 =
+  {
+    buyer : Principal;
+    created_at : Timestamp__301639476;
+    id : OrderId__197865225;
+    items : [OrderItem__1012446955];
+    pickup : Bool;
+    shipping_address : ?Text;
+    var status : OrderStatus__352169100;
+    total_cents : Nat
+  };
+type PlantId__287120832 = Nat;
+type PlantStage__144234446 = {#Mature; #Seed; #Seedling};
+type Plant__117398108 =
+  {
+    var additional_notes : ?Text;
+    cell_position : Nat;
+    var common_name : ?Text;
+    var container_size : ?ContainerSize__870711714;
+    created_by : Principal;
+    var for_sale : Bool;
+    var genetics : Text;
+    var germination_date : ?Timestamp__301639476;
+    id : PlantId__287120832;
+    var is_cooked : Bool;
+    var is_transplanted : Bool;
+    var latin_name : ?Text;
+    var nft_id : ?Text;
+    nft_standard : NFTStandard__155758646;
+    var notes : Text;
+    var origin : ?Text;
+    var pest_notes : ?Text;
+    var photo_keys : [Text];
+    var photos : [Text];
+    planting_date : Timestamp__301639476;
+    var sold : Bool;
+    var sold_to : ?Principal;
+    source_plant_id : ?PlantId__287120832;
+    var stage : PlantStage__144234446;
+    var transplant_date : ?Timestamp__301639476;
+    var transplant_plant_id : ?PlantId__287120832;
+    tray_id : TrayId__827943418;
+    variety : Text;
+    var watering_schedule : ?Text
+  };
+type PoolNFTRarity__973922978 = {#Common; #Rare; #Uncommon};
+type PoolNFTRecord__780351116 =
+  {
+    var assignedAt : ?Timestamp__849757760;
+    var assignedTo : ?Principal;
+    var claimTokenId : ?Text;
+    compositeImageKey : Text;
+    id : Nat;
+    layerCombination : [Nat];
+    rarityTier : RarityTier__883808048;
+    var shopProductId : ?Nat;
+    var status : PoolNFTStatus__819971382
+  };
+type PoolNFTStatus__1001333969 =
+  {
+    #Airdropped : {at : Timestamp__301639476; to : Principal};
+    #AssignedToQR : {at : Timestamp__301639476; claim_token : Text};
+    #ListedOnShop : {at : Timestamp__301639476; product_id : Nat};
+    #Ready
+  };
+type PoolNFTStatus__819971382 = {#Airdropped; #QRAssigned; #Ready; #Shop};
+type PoolNFT__75340577 =
+  {
+    generated_at : Timestamp__301639476;
+    id : Nat;
+    image_key : Text;
+    layer_combo : [Text];
+    rarity : PoolNFTRarity__973922978;
+    var status : PoolNFTStatus__1001333969;
+    token_id : Text
+  };
+type PostId__861309770 = Nat;
+type Post__639384058 =
+  {
+    anonymous : Bool;
+    author : Principal;
+    content : Text;
+    created_at : Timestamp__301639476;
+    id : PostId__861309770;
+    image_key : ?Text;
+    likes : Set__532252804<Principal>;
+    var updated_at : Timestamp__301639476
+  };
+type ProductCategory__702162164 =
+  {#Gallon1; #Gallon5; #GardenInputs; #Seedling; #Spice};
+type ProductId__160010635 = Nat;
+type Product__787231858 =
+  {
+    var active : Bool;
+    category : ProductCategory__702162164;
+    var description : Text;
+    id : ProductId__160010635;
+    var image_key : ?Text;
+    inventory_category : ?InventoryCategory__109365326;
+    var name : Text;
+    var plant_id : ?PlantId__287120832;
+    var price_cents : Nat;
+    variety : ?Text
+  };
+type ProposalId__842800336 = Nat;
+type ProposalType__464629755 = {#General; #PlantVariety; #Seasoning};
+type Proposal__387280493 =
+  {
+    created_at : Timestamp__301639476;
+    created_by : Principal;
+    description : Text;
+    ends_at : Timestamp__301639476;
+    id : ProposalId__842800336;
+    options : [Text];
+    proposal_type : ProposalType__464629755;
+    title : Text;
+    votes : Map__605269027<Principal, Nat>
+  };
+type RWATokenMetadata__218232495 =
+  {
+    attributes : [(Text, Text)];
+    description : Text;
+    image_key : Text;
+    minted_at : Timestamp__301639476;
+    name : Text;
+    owner : ?Principal;
+    rarity_tier : Nat;
+    token_id : Text
+  };
+type RarityTier__632493009 = {#Common; #Rare; #Uncommon};
+type RarityTier__883808048 = RarityTier__632493009;
+type RecipeId__181217121 = Nat;
+type Recipe__767283240 =
+  {
+    application_notes : Text;
+    created_at : Timestamp__301639476;
+    description : Text;
+    full_name : Text;
+    id : RecipeId__181217121;
+    ingredients : [Text];
+    instructions : [Text];
+    is_featured : Bool;
+    name : Text;
+    photo_key : ?Text;
+    shop_link : ?Text;
+    shop_link_label : ?Text;
+    tags : [Text];
+    updated_at : Timestamp__301639476
+  };
+type ResaleListing__60816151 =
+  {
+    id : Text;
+    var is_active : Bool;
+    listed_at : Timestamp__301639476;
+    plant_id : PlantId__287120832;
+    price_icp : Float;
+    rarity_tier : RarityTier__632493009;
+    var seller : Principal
+  };
+type SavedSchedule__517289323 =
+  {
+    created_at : Timestamp__301639476;
+    id : ScheduleId__346114795;
+    inputs : [Text];
+    owner : Principal;
+    share_token : Text;
+    stage : Text
+  };
+type ScheduleId__346114795 = Text;
+type Set__532252804<T> = Set__710576254<T>;
+type Set__710576254<T> =
+  {var root : Node__92254746<T>; var size : Nat__490723111};
+type StageHistory__618200604 =
+  {
+    notes : Text;
+    stage : PlantStage__144234446;
+    timestamp : Timestamp__301639476
+  };
+type StoredFile__300807806 =
+  {
+    data : [Nat8];
+    filename : Text;
+    layer : Text;
+    mime_type : Text;
+    path : Text;
+    size : Nat;
+    uploaded_at : Timestamp__301639476
+  };
+type Timestamp__301639476 = Int;
+type Timestamp__849757760 = Timestamp__301639476;
+type TokenPrice__695952477 =
+  {
+    last_updated : Timestamp__301639476;
+    price_in_icp_e8s : Nat;
+    token : OracleToken__903776040
+  };
+type TrayId__827943418 = Nat;
+type Tray__857497617 =
+  {
+    cell_count : Nat;
+    var cells : [?PlantId__287120832];
+    id : TrayId__827943418;
+    var name : Text;
+    nft_standard : NFTStandard__155758646;
+    planting_date : Timestamp__301639476
+  };
+type TreasuryToken__418009132 = {#ICP; #ckBTC; #ckETH; #ckUSDC; #ckUSDT};
+type TreasuryTransaction__1018868464 =
+  {
+    amount_e8s : Nat;
+    from_principal : ?Principal;
+    id : Text;
+    memo : ?Text;
+    offer_id : ?Text;
+    timestamp : Timestamp__301639476;
+    to_principal : ?Principal;
+    token : TreasuryToken__418009132;
+    tx_type : TreasuryTxType__818179089
+  };
+type TreasuryTxType__818179089 =
+  {#Deposit; #OfferSettlement; #Transfer; #Withdrawal};
+type TxStatus__446544354 = {#completed; #failed; #pending};
+type TxType__915280319 = {#receive; #send};
+type UserProfile__789991145 =
+  {
+    var avatar_key : ?Text;
+    var bio : Text;
+    created_at : Timestamp__301639476;
+    var follows : Set__532252804<Principal>;
+    principal_id : Principal;
+    var username : Text
+  };
+type UserRole__1054455867 = {#admin; #guest; #user};
+type WalletState__237019573 =
+  {
+    var ckbtc : Nat;
+    var cketh : Nat;
+    var ckusdc : Nat;
+    var ckusdt : Nat;
+    var icp : Nat
+  };
+type WalletTransaction__850303578 =
+  {
+    amount : Nat;
+    counterparty : Text;
+    id : Text;
+    status : TxStatus__446544354;
+    timestamp : Timestamp__301639476;
+    tokenSymbol : Text;
+    txType : TxType__915280319
+  };
+type WeatherRecordId__1032459653 = Nat;
+type WeatherRecord__85244428 =
+  {
+    date : Text;
+    humidity : ?Float;
+    id : WeatherRecordId__1032459653;
+    latitude : Float;
+    longitude : Float;
+    precipitation : Float;
+    recorded_at : Timestamp__301639476;
+    temperature_max : Float;
+    temperature_min : Float;
+    user : Principal;
+    wind_speed : ?Float
+  };
+actor {
+  stable ADMIN_PID : Principal;
+  stable CACHE_TTL_NS : Int;
+  stable OFFERS_ADMIN_PID : Principal;
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__1054455867>
+    };
+  stable artworkLayers :
+    {
+      var root :
+        Node__46230540<ArtworkLayerId__260885812, ArtworkLayer__311643346>;
+      var size : Nat__490723111
+    };
+  stable artworkUploadSession :
+    {
+      var chunks : [[Nat8]];
+      var received : Nat;
+      started_at : Timestamp__301639476;
+      var total_chunks : Nat
+    };
+  stable batchGiftPacks :
+    {
+      var root : Node__46230540<Text, BatchGiftPack__69244440>;
+      var size : Nat__490723111
+    };
+  stable claimMemberships :
+    {
+      var root : Node__46230540<Principal, RWATokenMetadata__218232495>;
+      var size : Nat__490723111
+    };
+  stable claimTokens :
+    {
+      var root :
+        Node__46230540<ClaimTokenId__186876841, ClaimToken__351520388>;
+      var size : Nat__490723111
+    };
+  stable comments :
+    {
+      var root : Node__46230540<CommentId__821569710, Comment__775004821>;
+      var size : Nat__490723111
+    };
+  stable extTokens :
+    {
+      var root : Node__46230540<Text, EXTMetadata__38133320>;
+      var size : Nat__490723111
+    };
+  stable feedings :
+    {
+      var root : Node__46230540<FeedingId__957947504, Feeding__897304207>;
+      var size : Nat__490723111
+    };
+  stable icrc37Tokens :
+    {
+      var root : Node__46230540<Text, ICRC37Metadata__273784523>;
+      var size : Nat__490723111
+    };
+  stable memberships :
+    {
+      var root : Node__46230540<Principal, MembershipNFT__773042226>;
+      var size : Nat__490723111
+    };
+  stable nextArtworkLayerId : {var value : Nat};
+  stable nextCommentId : {var value : Nat};
+  stable nextFeedingId : {var value : Nat};
+  stable nextMembershipId : {var value : Nat};
+  stable nextOfferId : {var value : Nat};
+  stable nextOrderId : {var value : Nat};
+  stable nextPlantId : {var value : Nat};
+  stable nextPoolProductId : {var value : Nat};
+  stable nextPostId : {var value : Nat};
+  stable nextProductId : {var value : Nat};
+  stable nextProposalId : {var value : Nat};
+  stable nextRecipeId : {var value : Nat};
+  stable nextTrayId : {var value : Nat};
+  stable nextTreasuryTxId : {var value : Nat};
+  stable nextWeatherRecordId : {var value : Nat};
+  stable nftPool :
+    {
+      var root : Node__46230540<Nat, PoolNFTRecord__780351116>;
+      var size : Nat__490723111
+    };
+  stable offers :
+    {
+      var root : Node__46230540<Text, Offer__448706843>;
+      var size : Nat__490723111
+    };
+  stable orders :
+    {
+      var root : Node__46230540<OrderId__197865225, Order__308187248>;
+      var size : Nat__490723111
+    };
+  stable plants :
+    {
+      var root : Node__46230540<PlantId__287120832, Plant__117398108>;
+      var size : Nat__490723111
+    };
+  stable poolNFTs :
+    {
+      var root : Node__46230540<Nat, PoolNFT__75340577>;
+      var size : Nat__490723111
+    };
+  stable posts :
+    {
+      var root : Node__46230540<PostId__861309770, Post__639384058>;
+      var size : Nat__490723111
+    };
+  stable priceOracleState :
+    {
+      var last_full_refresh : Timestamp__301639476;
+      var prices : [TokenPrice__695952477]
+    };
+  stable products :
+    {
+      var root : Node__46230540<ProductId__160010635, Product__787231858>;
+      var size : Nat__490723111
+    };
+  stable profiles :
+    {
+      var root : Node__46230540<Principal, UserProfile__789991145>;
+      var size : Nat__490723111
+    };
+  stable proposals :
+    {
+      var root : Node__46230540<ProposalId__842800336, Proposal__387280493>;
+      var size : Nat__490723111
+    };
+  stable recipes :
+    {
+      var root : Node__46230540<RecipeId__181217121, Recipe__767283240>;
+      var size : Nat__490723111
+    };
+  stable resaleListings :
+    {
+      var root : Node__46230540<Text, ResaleListing__60816151>;
+      var size : Nat__490723111
+    };
+  stable rwaTokens :
+    {
+      var root : Node__46230540<Text, RWATokenMetadata__218232495>;
+      var size : Nat__490723111
+    };
+  stable savedSchedules :
+    {
+      var root :
+        Node__46230540<ScheduleId__346114795, SavedSchedule__517289323>;
+      var size : Nat__490723111
+    };
+  stable scheduleShareIndex :
+    {
+      var root : Node__46230540<Text, ScheduleId__346114795>;
+      var size : Nat__490723111
+    };
+  stable selfPrincipalCache : {var value : Text};
+  stable stageHistory :
+    {
+      var root :
+        Node__46230540<PlantId__287120832,
+                        List__415060402<StageHistory__618200604>>;
+      var size : Nat__490723111
+    };
+  stable storedFiles :
+    {
+      var root : Node__46230540<Text, StoredFile__300807806>;
+      var size : Nat__490723111
+    };
+  stable trays :
+    {
+      var root : Node__46230540<TrayId__827943418, Tray__857497617>;
+      var size : Nat__490723111
+    };
+  stable treasuryState :
+    {
+      var ckbtcBalance : Nat;
+      var ckethBalance : Nat;
+      var ckusdcBalance : Nat;
+      var ckusdtBalance : Nat;
+      var icpBalance : Nat
+    };
+  stable treasuryTxLog :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?TreasuryTransaction__1018868464]];
+      var elementIndex : Nat__490723111
+    };
+  stable txLog :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?WalletTransaction__850303578]];
+      var elementIndex : Nat__490723111
+    };
+  stable upgradeEvents :
+    {
+      var root :
+        Node__46230540<PlantId__287120832,
+                        List__415060402<LifecycleUpgradeEvent__340101678>>;
+      var size : Nat__490723111
+    };
+  stable wallets :
+    {
+      var root : Node__46230540<Principal, WalletState__237019573>;
+      var size : Nat__490723111
+    };
+  stable weatherIndex :
+    {
+      var root : Node__46230540<Text, WeatherRecordId__1032459653>;
+      var size : Nat__490723111
+    };
+  stable weatherRecords :
+    {
+      var root :
+        Node__46230540<WeatherRecordId__1032459653, WeatherRecord__85244428>;
+      var size : Nat__490723111
+    }
+};
