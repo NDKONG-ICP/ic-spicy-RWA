@@ -12,9 +12,11 @@ import {
   Heart,
   ImageIcon,
   MessageCircle,
+  Pencil,
   Plus,
   Send,
   Share2,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +28,8 @@ import {
   useCommentsByPost,
   useCreateComment,
   useCreatePost,
+  useDeletePost,
+  useEditPost,
   useFollowUser,
   useLikePost,
   usePosts,
@@ -295,16 +299,29 @@ function CommentThread({
 
 // ─── PostCard ─────────────────────────────────────────────────────────────────
 
+/** Returns true if the post is still within the 48-hour editable window. */
+function isEditable(createdAt: bigint): boolean {
+  return Date.now() - Number(createdAt) / 1_000_000 < 48 * 60 * 60 * 1000;
+}
+
 function PostCard({ post }: { post: Post }) {
   const { isAuthenticated, login, principal } = useAuth();
   const likePost = useLikePost();
   const followUser = useFollowUser();
+  const editPost = useEditPost();
+  const deletePost = useDeletePost();
+
   const [showShare, setShowShare] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isOwnPost =
     !post.is_anonymous &&
     post.author_principal &&
     principal?.toText() === post.author_principal.toText();
+
+  const canEditDelete = isOwnPost && isEditable(post.created_at);
 
   const handleLike = () => {
     if (!isAuthenticated) {
@@ -328,6 +345,36 @@ function PostCard({ post }: { post: Post }) {
         onError: () => toast.error("Failed to follow."),
       },
     );
+  };
+
+  const handleSaveEdit = async () => {
+    const trimmed = editContent.trim();
+    if (!trimmed || trimmed === post.content) {
+      setIsEditing(false);
+      return;
+    }
+    try {
+      await editPost.mutateAsync({ postId: post.id, newContent: trimmed });
+      toast.success("Post updated.");
+      setIsEditing(false);
+    } catch {
+      toast.error("Failed to update post.");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditContent(post.content);
+    setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deletePost.mutateAsync(post.id);
+      toast.success("Post deleted.");
+      setShowDeleteConfirm(false);
+    } catch {
+      toast.error("Failed to delete post.");
+    }
   };
 
   return (
@@ -372,28 +419,133 @@ function PostCard({ post }: { post: Post }) {
           </div>
         </div>
 
-        {post.author_principal &&
-          !post.is_anonymous &&
-          !isOwnPost &&
-          isAuthenticated && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-border h-7 text-xs shrink-0 hover:border-primary/50 hover:text-primary"
-              onClick={handleFollow}
-              disabled={followUser.isPending}
-              data-ocid="post-follow-btn"
-            >
-              <Users className="w-3 h-3 mr-1" />
-              Follow
-            </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Edit / Delete — only visible to author within 48h */}
+          {canEditDelete && !isEditing && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditContent(post.content);
+                  setIsEditing(true);
+                }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-smooth"
+                aria-label="Edit post"
+                data-ocid="post-edit-btn"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-smooth"
+                aria-label="Delete post"
+                data-ocid="post-delete-btn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </>
           )}
+
+          {post.author_principal &&
+            !post.is_anonymous &&
+            !isOwnPost &&
+            isAuthenticated && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border h-7 text-xs hover:border-primary/50 hover:text-primary"
+                onClick={handleFollow}
+                disabled={followUser.isPending}
+                data-ocid="post-follow-btn"
+              >
+                <Users className="w-3 h-3 mr-1" />
+                Follow
+              </Button>
+            )}
+        </div>
       </div>
 
-      {/* Content */}
-      <p className="text-sm text-foreground leading-relaxed mb-4 break-words">
-        {post.content}
-      </p>
+      {/* Delete confirmation dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="mb-4 rounded-xl bg-destructive/8 border border-destructive/30 p-4 space-y-3"
+            data-ocid="post-delete-dialog"
+          >
+            <p className="text-sm text-foreground font-medium">
+              Delete this post?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              This action cannot be undone.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deletePost.isPending}
+                className="h-7 text-xs"
+                data-ocid="post-delete-confirm-btn"
+              >
+                {deletePost.isPending ? "Deleting…" : "Yes, delete"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="h-7 text-xs border-border"
+                data-ocid="post-delete-cancel-btn"
+              >
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Content — inline editor or read view */}
+      {isEditing ? (
+        <div className="mb-4 space-y-2" data-ocid="post-edit-form">
+          <Textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="resize-none text-sm min-h-[90px]"
+            maxLength={1024}
+            autoFocus
+            data-ocid="post-edit-input"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-7 text-xs bg-primary hover:bg-primary/90"
+              onClick={handleSaveEdit}
+              disabled={editPost.isPending || !editContent.trim()}
+              data-ocid="post-edit-save-btn"
+            >
+              {editPost.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs border-border"
+              onClick={handleCancelEdit}
+              data-ocid="post-edit-cancel-btn"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-foreground leading-relaxed mb-4 break-words">
+          {post.content}
+        </p>
+      )}
 
       {/* Optional image */}
       {post.image_key && (
@@ -659,7 +811,13 @@ function FeedSkeleton() {
 
 export default function CommunityPage() {
   const { isAuthenticated, login } = useAuth();
-  const { data: posts, isLoading } = usePosts();
+  // CRITICAL (TanStack Query v5): Use isPending (not isLoading) as the loading
+  // guard. isLoading = isPending && isFetching. In the window between the query
+  // becoming enabled and the first fetch completing, isLoading can briefly be
+  // false while data is still undefined — causing a premature empty-state render
+  // and making it appear as if the user's post was deleted.
+  // isPending stays true until the FIRST successful response arrives.
+  const { data: posts, isPending: isPostsPending } = usePosts();
   const [showForm, setShowForm] = useState(false);
 
   const sortedPosts = posts
@@ -743,7 +901,7 @@ export default function CommunityPage() {
       </AnimatePresence>
 
       {/* Feed */}
-      {isLoading ? (
+      {isPostsPending ? (
         <FeedSkeleton />
       ) : sortedPosts.length > 0 ? (
         <div className="space-y-4" data-ocid="post-list">

@@ -36,6 +36,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { PlantPublic, ResaleListingPublic } from "../backend";
 import { RarityTier } from "../backend";
+import { useActorReady } from "../hooks/useActorReady";
 import { useAuth } from "../hooks/useAuth";
 import {
   useCancelResaleListing,
@@ -869,9 +870,10 @@ type ProfileTab = "overview" | "my-nfts";
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
-  const { isAuthenticated, login, principal } = useAuth();
-  const { data: profile, isLoading } = useProfile();
-  const { data: isAdmin, isLoading: isAdminLoading } = useIsAdmin();
+  const { isAuthenticated, login, principal, isInitializing } = useAuth();
+  const { actorReady } = useActorReady();
+  const { data: profile, isPending: isProfilePending } = useProfile();
+  const { data: isAdmin, isPending: isAdminPending } = useIsAdmin();
   const { data: orders } = useMyOrders();
   const saveProfile = useSaveProfile();
   const navigate = useNavigate();
@@ -880,6 +882,18 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
+
+  // Always log current state so we can see what's happening in the console
+  console.log("[ProfilePage]", {
+    principal: principal?.toText() ?? "anon",
+    isAuthenticated,
+    isInitializing,
+    actorReady,
+    isAdmin,
+    isAdminPending,
+    isProfilePending,
+    hasProfile: !!profile,
+  });
 
   useEffect(() => {
     if (profile) {
@@ -907,6 +921,18 @@ export default function ProfilePage() {
       toast.error("Failed to save profile.");
     }
   };
+
+  // While II is initializing (restoring from Chrome redirect), show a loader
+  // rather than the "Sign in" prompt — we don't yet know if the user is authenticated.
+  if (isInitializing) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -936,7 +962,23 @@ export default function ProfilePage() {
     );
   }
 
-  if (isLoading || isAdminLoading) {
+  // isAdmin is now synchronous — no async pending state needed for it.
+  // isPending is only true while Internet Identity is initializing.
+  //
+  // isStillLoading: wait for ALL of:
+  //   1. isInitializing=false  — II has finished restoring from IndexedDB (Chrome redirect)
+  //   2. isAdminPending=false  — principal is known (== isInitializing=false, safety net)
+  //   3. actorReady=true       — actor HttpAgent confirmed using authenticated identity
+  //   4. isProfilePending=false — profile query has returned at least once
+  //
+  // CHROME FIX: We MUST include isInitializing here. Without it, the component
+  // can render during the brief window after redirect where II is restoring from
+  // IndexedDB — principal is not yet known, so actorReady=false and the component
+  // might see profile=null and jump to OnboardingForm.
+  const isStillLoading =
+    isInitializing || isAdminPending || !actorReady || isProfilePending;
+
+  if (isAuthenticated && isStillLoading) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -946,7 +988,9 @@ export default function ProfilePage() {
     );
   }
 
-  // Admin bypass — never show onboarding to the owner, even if profile is null
+  // Admin bypass — never show onboarding to the owner, even if profile is null.
+  // Only applies once BOTH checks have completed (isPending=false for both).
+  // isAdminPending=false here means we have a definitive result from the backend.
   if (!profile && isAdmin) {
     return (
       <motion.div

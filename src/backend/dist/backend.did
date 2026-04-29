@@ -91,6 +91,7 @@ type UpdateProductInput =
    active: opt bool;
    description: opt text;
    image_key: opt text;
+   image_keys: opt vec text;
    name: opt text;
    price_cents: opt nat;
    product_id: ProductId;
@@ -314,6 +315,7 @@ type ProductPublic =
    description: text;
    id: ProductId;
    image_key: opt text;
+   image_keys: vec text;
    inventory_category: opt InventoryCategory;
    name: text;
    plant_id: opt PlantId;
@@ -658,6 +660,7 @@ type CreateProductInput =
    category: ProductCategory;
    description: text;
    image_key: opt text;
+   image_keys: vec text;
    inventory_category: opt InventoryCategory;
    name: text;
    plant_id: opt PlantId;
@@ -675,6 +678,8 @@ type CreatePlantInput =
    additional_notes: opt text;
    cell_position: nat;
    common_name: opt text;
+   container_size: opt ContainerSize;
+   date_purchased: opt Timestamp;
    genetics: text;
    latin_name: opt text;
    nft_standard: NFTStandard;
@@ -706,12 +711,24 @@ type CounterOfferInput =
  };
 type ContainerSize = 
  variant {
+   Cell128;
+   Cell72;
    Gal1;
+   Gal10GrowBag;
+   Gal15GrowBag;
+   Gal1New;
    Gal3;
+   Gal3New;
    Gal5;
+   Gal5Bucket;
+   Gal5GrowBag;
+   Gal7GrowBag;
+   Gal7Pot;
    InGround;
    Other: text;
    Oz16;
+   Pot4Inch;
+   Pot6Inch;
  };
 type CommentPublic = 
  record {
@@ -734,6 +751,11 @@ type ClaimTokenPublic =
    redeemed_by: opt principal;
  };
 type ClaimTokenId = text;
+type BulkCreateResult = 
+ variant {
+   err: text;
+   ok: ProductPublic;
+ };
 type BatchGiftPackPublic = 
  record {
    claim_token_id: ClaimTokenId;
@@ -819,6 +841,8 @@ service : {
   batchMintFoundersCollection: (entries: vec FoundersMintInput) ->
    (vec FoundersMintResult);
   beginArtworkUpload: (totalChunks: nat) -> ();
+  bulkCreateProducts: (inputs: vec CreateProductInput) ->
+   (vec BulkCreateResult);
   buyResaleListing: (listing_id: text) -> (variant {
                                              err: text;
                                              ok;
@@ -844,9 +868,13 @@ service : {
   createRecipe: (input: CreateRecipeInput) -> (Recipe);
   createTray: (input: CreateTrayInput) -> (TrayPublic);
   dabTransform: (input: TransformationInput) -> (TransformationOutput) query;
+  deletePost: (post_id: PostId) -> ();
   deleteProduct: (product_id: ProductId) -> ();
   deleteRecipe: (id: RecipeId) -> (bool);
   deleteTray: (tray_id: TrayId) -> ();
+  editPost: (post_id: PostId, new_content: text) -> (PostPublic);
+  ensureAdminProfile: () -> ();
+  ensureCallerProfile: () -> ();
   finalizeArtworkUpload: () -> (UploadResult);
   followUser: (target: principal) -> ();
   generateAllPoolNFTs: () -> (nat);
@@ -855,6 +883,7 @@ service : {
   generatePickupQRPayload: (plant_id: PlantId) -> (text) query;
   getActiveResaleListings: () -> (vec ResaleListingPublic) query;
   getAdminPrincipal: () -> (text) query;
+  getAdminPrincipals: () -> (vec text) query;
   getArtworkFile: (path: text) -> (opt vec nat8);
   getArtworkUploadResult: () -> (UploadResult) query;
   getArtworkUploadStatus: () -> (UploadSessionStatus) query;

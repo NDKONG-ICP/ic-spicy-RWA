@@ -22,7 +22,10 @@ mixin (
   nextTreasuryTxId   : { var value : Nat },
 ) {
 
-  let OFFERS_ADMIN_PID : Principal = Principal.fromText("lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae");
+  // Primary admin PID text — must NOT be converted to Principal at mixin level
+  // (Principal.fromText at module/mixin level traps at canister init time).
+  // Conversion is done lazily inside resolveSellerForNft().
+  let OFFERS_ADMIN_PID_TEXT : Text = "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae";
 
   // Convert OfferToken to the matching OracleToken for price lookup
   func offerTokenToOracle(token : OfferTypes.OfferToken) : PriceOracleTypes.OracleToken {
@@ -49,8 +52,10 @@ mixin (
   // Derive a seller principal from the NFT listing.
   // For now we use the admin wallet as the platform seller — in a full integration
   // this would look up the resale listing to find the actual seller.
+  // Principal.fromText() is called lazily here (inside the function body) to avoid
+  // the 'blob_of_principal: invalid principal' trap at canister init time.
   func resolveSellerForNft(_nftId : Text) : Principal {
-    OFFERS_ADMIN_PID
+    Principal.fromText(OFFERS_ADMIN_PID_TEXT)
   };
 
   /// Submit a new offer on an NFT (buyer calls this).

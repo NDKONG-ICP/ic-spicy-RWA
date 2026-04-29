@@ -14,12 +14,26 @@ module {
   };
 
   public type ContainerSize = {
+    // Legacy variants — kept for backward compatibility with existing data
     #Oz16;
     #Gal1;
     #Gal3;
     #Gal5;
-    #InGround;
-    #Other : Text;
+    // Current variants
+    #Cell72;       // 72 cell tray
+    #Cell128;      // 128 cell tray
+    #Pot4Inch;     // 4 inch pot
+    #Pot6Inch;     // 6 inch pot
+    #Gal1New;      // 1 gallon
+    #Gal3New;      // 3 gallon
+    #Gal5Bucket;   // 5 gallon Bucket
+    #Gal5GrowBag;  // 5 gallon grow bag
+    #Gal7Pot;      // 7 gallon Pot
+    #Gal7GrowBag;  // 7 gallon grow bag
+    #Gal10GrowBag; // 10 gallon grow bag
+    #Gal15GrowBag; // 15 gallon grow bag
+    #InGround;     // In ground crops
+    #Other : Text; // User-specified
   };
 
   public type Plant = {
@@ -93,6 +107,7 @@ module {
     tray_id : Common.TrayId;
     cell_position : Nat;
     planting_date : Common.Timestamp;
+    date_purchased : ?Common.Timestamp; // optional; defaults to current time if null
     nft_standard : NFTStandard;
     notes : Text;
     common_name : ?Text;
@@ -101,6 +116,7 @@ module {
     watering_schedule : ?Text;
     pest_notes : ?Text;
     additional_notes : ?Text;
+    container_size : ?ContainerSize; // container at creation time (optional)
     source_plant_id : ?Common.PlantId;
   };
 

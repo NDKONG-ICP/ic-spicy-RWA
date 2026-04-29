@@ -44,24 +44,89 @@ import ArtworkUploadAPI "mixins/artwork-upload-api";
 import PoolAPI "mixins/pool-api";
 import PoolLib "lib/pool";
 import PoolTypes "types/pool";
+import Migration "migration";
 
 
 
+
+
+
+(with migration = Migration.run)
 actor ICSpicy {
   // Authorization
   let accessControlState = AccessControl.initState();
 
-  // Hardcode the sole admin PID — this principal is ALWAYS admin regardless of who calls first.
+  // All owner principals are always admin — regardless of who calls first.
   // lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae
-  let ADMIN_PID : Principal = Principal.fromText("lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae");
-  accessControlState.userRoles.add(ADMIN_PID, #admin);
-  accessControlState.adminAssigned := true;
+  // 7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh
+  // 7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae  (canonical II PID with checksum suffix)
+  //
+  // IMPORTANT: Principal.fromText() must NOT be called at module level — it
+  // traps at canister init time if the string is ever malformed.
+  // All conversions are done lazily inside functions instead.
+
+  // Helper: returns true when caller is any of the owner principals
+  func isAdminPid(p : Principal) : Bool {
+    let pid0 = Principal.fromText("lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae");
+    let pid1 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh");
+    let pid2 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae");
+    p == pid0 or p == pid1 or p == pid2
+  };
+
+  // Seed admin roles — called lazily inside public functions to avoid init-time trap.
+  // Principal.fromText() at actor body level (including do{} blocks) traps at canister
+  // install time before the canister ID is assigned. Use a lazy helper instead.
+  var adminRolesSeeded : Bool = false;
+  func seedAdminRoles() {
+    if (adminRolesSeeded) return;
+    let pid0 = Principal.fromText("lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae");
+    let pid1 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh");
+    let pid2 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae");
+    accessControlState.userRoles.add(pid0, #admin);
+    accessControlState.userRoles.add(pid1, #admin);
+    accessControlState.userRoles.add(pid2, #admin);
+    accessControlState.adminAssigned := true;
+    adminRolesSeeded := true;
+  };
 
   include MixinAuthorization(accessControlState);
 
-  // Returns the hardcoded admin principal for frontend verification
+  // Returns all hardcoded admin principals for frontend verification (primary first)
   public query func getAdminPrincipal() : async Text {
-    ADMIN_PID.toText();
+    "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae"
+  };
+
+  // Returns all admin PIDs so the frontend can recognise every owner account
+  public query func getAdminPrincipals() : async [Text] {
+    [
+      "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae",
+      "7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh",
+      "7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae",
+    ]
+  };
+
+  // Safety-net: called by the frontend on every admin sign-in.
+  // Re-creates the admin profile if it was lost (e.g. after a redeploy that reset state).
+  // Silently ignored when called by any principal that is NOT one of the admin PIDs.
+  // Idempotent — does nothing if the profile already exists.
+  public shared ({ caller }) func ensureAdminProfile() : async () {
+    seedAdminRoles();
+    seedAdminProfiles();
+    if (not isAdminPid(caller)) return;
+    switch (profiles.get(caller)) {
+      case (?_) {};
+      case null {
+        let adminProfile : CommunityTypes.UserProfile = {
+          principal_id = caller;
+          var username = "Admin";
+          var bio = "";
+          var avatar_key = null;
+          var follows = Set.empty<Principal>();
+          created_at = 0;
+        };
+        profiles.add(caller, adminProfile);
+      };
+    };
   };
 
   // Returns this canister's own principal ID as Text.
@@ -141,19 +206,31 @@ actor ICSpicy {
   let comments = Map.empty<Common.CommentId, CommunityTypes.Comment>();
   let profiles = Map.empty<Principal, CommunityTypes.UserProfile>();
 
-  // Auto-seed admin profile so admin is never prompted to create an account.
-  // Idempotent — skipped if the profile already exists.
-  switch (profiles.get(ADMIN_PID)) { case (?_) {}; case null {
-    let adminProfile : CommunityTypes.UserProfile = {
-      principal_id = ADMIN_PID;
-      var username = "Admin";
-      var bio = "";
-      var avatar_key = null;
-      var follows = Set.empty<Principal>();
-      created_at = 0;
+  // Auto-seed admin profiles so neither admin PID is ever prompted to create an account.
+  // Idempotent — skipped per-PID if the profile already exists.
+  // Executed lazily inside public functions — NOT at actor body level — to avoid
+  // the 'blob_of_principal: invalid principal' trap during canister install.
+  var adminProfilesSeeded : Bool = false;
+  func seedAdminProfiles() {
+    if (adminProfilesSeeded) return;
+    let pid0 = Principal.fromText("lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae");
+    let pid1 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh");
+    let pid2 = Principal.fromText("7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae");
+    for (pid in [pid0, pid1, pid2].values()) {
+      switch (profiles.get(pid)) { case (?_) {}; case null {
+        let adminProfile : CommunityTypes.UserProfile = {
+          principal_id = pid;
+          var username = "Admin";
+          var bio = "";
+          var avatar_key = null;
+          var follows = Set.empty<Principal>();
+          created_at = 0;
+        };
+        profiles.add(pid, adminProfile);
+      }};
     };
-    profiles.add(ADMIN_PID, adminProfile);
-  }};
+    adminProfilesSeeded := true;
+  };
 
   // Membership state
   let memberships = Map.empty<Principal, MembershipTypes.MembershipNFT>();
@@ -219,17 +296,24 @@ actor ICSpicy {
   let nftPool : PoolLib.PoolMap   = Map.empty<Nat, PoolTypes.PoolNFTRecord>();
   let nextPoolProductId           = { var value : Nat = 1 };
 
-  // Upload session — accumulates zip chunks before finalization
+  // Upload session — writes zip chunks into a pre-allocated flat buffer.
+  // The flat buffer approach avoids the [[Nat8]] heap accumulation that caused
+  // IC0539 Wasm memory limit exceeded on large artwork zips.
   let artworkUploadSession : ArtworkUploadTypes.UploadSession = {
-    var chunks       = [];
+    var buffer       = [var];
+    var chunk_size   = 0;
     var total_chunks = 0;
     var received     = 0;
     started_at       = 0;
   };
 
-  // Cache this canister's own principal as text (used in UploadResult)
-  let selfPrincipalCache = { var value : Text = "" };
-  selfPrincipalCache.value := Principal.fromActor(ICSpicy).toText();
+  // This canister's own principal, computed lazily on first call.
+  // We pass a closure so that Principal.fromActor() is never called at actor
+  // body level (which would trigger 'blob_of_principal: invalid principal'
+  // on first install before the canister ID is assigned).
+  func selfPrincipalText() : Text {
+    Principal.fromActor(ICSpicy).toText()
+  };
 
   // Auto-seed KNF recipes on first install (idempotent — skipped if already populated)
   RecipesLib.seedRecipes(recipes, nextRecipeId);
@@ -251,6 +335,6 @@ actor ICSpicy {
   include TreasuryAPI(accessControlState, treasuryState, treasuryTxLog, nextTreasuryTxId);
   include PriceOracleAPI(accessControlState, priceOracleState);
   include DABAPI(accessControlState);
-  include ArtworkUploadAPI(accessControlState, artworkUploadSession, storedFiles, poolNFTs, selfPrincipalCache);
+  include ArtworkUploadAPI(accessControlState, artworkUploadSession, storedFiles, poolNFTs, selfPrincipalText);
   include PoolAPI(accessControlState, nftPool, nextPoolProductId);
 };

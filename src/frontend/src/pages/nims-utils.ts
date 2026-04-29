@@ -40,6 +40,36 @@ export function stageName(stage: PlantStage): string {
 export function containerSizeLabel(cs: ContainerSize | undefined): string {
   if (!cs) return "—";
   switch (cs.__kind__) {
+    // New expanded variants
+    case "Cell72":
+      return "72 Cell Tray";
+    case "Cell128":
+      return "128 Cell Tray";
+    case "Pot4Inch":
+      return "4 Inch Pot";
+    case "Pot6Inch":
+      return "6 Inch Pot";
+    case "Gal1New":
+      return "1 Gallon";
+    case "Gal3New":
+      return "3 Gallon";
+    case "Gal5Bucket":
+      return "5 Gallon (Bucket)";
+    case "Gal5GrowBag":
+      return "5 Gallon (Grow Bag)";
+    case "Gal7Pot":
+      return "7 Gallon Pot";
+    case "Gal7GrowBag":
+      return "7 Gallon Grow Bag";
+    case "Gal10GrowBag":
+      return "10 Gallon Grow Bag";
+    case "Gal15GrowBag":
+      return "15 Gallon Grow Bag";
+    case "InGround":
+      return "In Ground";
+    case "Other":
+      return cs.Other ? `Other: ${cs.Other}` : "Other (specify)";
+    // Legacy aliases kept for backward compatibility
     case "Oz16":
       return "16 oz";
     case "Gal1":
@@ -48,34 +78,70 @@ export function containerSizeLabel(cs: ContainerSize | undefined): string {
       return "3 Gallon";
     case "Gal5":
       return "5 Gallon";
-    case "InGround":
-      return "In Ground";
-    case "Other":
-      return `Other: ${cs.Other}`;
     default:
       return "—";
   }
 }
+
+// All 14 container size options for dropdowns
+export const CONTAINER_SIZE_OPTIONS = [
+  { value: "cell72", label: "72 Cell Tray" },
+  { value: "cell128", label: "128 Cell Tray" },
+  { value: "pot4inch", label: "4 Inch Pot" },
+  { value: "pot6inch", label: "6 Inch Pot" },
+  { value: "1gal", label: "1 Gallon" },
+  { value: "3gal", label: "3 Gallon" },
+  { value: "5galbucket", label: "5 Gallon (Bucket)" },
+  { value: "5galgrowbag", label: "5 Gallon (Grow Bag)" },
+  { value: "7galpot", label: "7 Gallon Pot" },
+  { value: "7galgrowbag", label: "7 Gallon Grow Bag" },
+  { value: "10galgrowbag", label: "10 Gallon Grow Bag" },
+  { value: "15galgrowbag", label: "15 Gallon Grow Bag" },
+  { value: "inground", label: "In Ground" },
+  { value: "other", label: "Other (specify)" },
+] as const;
+
+export type ContainerSizeOption =
+  (typeof CONTAINER_SIZE_OPTIONS)[number]["value"];
 
 export function buildContainerSize(
   option: string,
   otherText: string,
 ): ContainerSize {
   switch (option) {
-    case "16oz":
-      return { __kind__: "Oz16", Oz16: null };
+    case "cell72":
+      return { __kind__: "Cell72", Cell72: null };
+    case "cell128":
+      return { __kind__: "Cell128", Cell128: null };
+    case "pot4inch":
+      return { __kind__: "Pot4Inch", Pot4Inch: null };
+    case "pot6inch":
+      return { __kind__: "Pot6Inch", Pot6Inch: null };
     case "1gal":
-      return { __kind__: "Gal1", Gal1: null };
+      return { __kind__: "Gal1New", Gal1New: null };
     case "3gal":
-      return { __kind__: "Gal3", Gal3: null };
-    case "5gal":
-      return { __kind__: "Gal5", Gal5: null };
+      return { __kind__: "Gal3New", Gal3New: null };
+    case "5galbucket":
+      return { __kind__: "Gal5Bucket", Gal5Bucket: null };
+    case "5galgrowbag":
+      return { __kind__: "Gal5GrowBag", Gal5GrowBag: null };
+    case "7galpot":
+      return { __kind__: "Gal7Pot", Gal7Pot: null };
+    case "7galgrowbag":
+      return { __kind__: "Gal7GrowBag", Gal7GrowBag: null };
+    case "10galgrowbag":
+      return { __kind__: "Gal10GrowBag", Gal10GrowBag: null };
+    case "15galgrowbag":
+      return { __kind__: "Gal15GrowBag", Gal15GrowBag: null };
     case "inground":
       return { __kind__: "InGround", InGround: null };
     case "other":
       return { __kind__: "Other", Other: otherText };
+    // Legacy aliases
+    case "16oz":
+      return { __kind__: "Oz16", Oz16: null };
     default:
-      return { __kind__: "Gal1", Gal1: null };
+      return { __kind__: "Gal1New", Gal1New: null };
   }
 }
 

@@ -146,6 +146,50 @@ export const FoundersMintResult = IDL.Record({
   'recipient' : IDL.Principal,
   'standard' : NFTStandard,
 });
+export const InventoryCategory = IDL.Variant({
+  'OtherSize' : IDL.Text,
+  'Gal1' : IDL.Null,
+  'Gal3' : IDL.Null,
+  'Gal5' : IDL.Null,
+  'Oz16' : IDL.Null,
+  'InGround' : IDL.Null,
+});
+export const ProductCategory = IDL.Variant({
+  'Spice' : IDL.Null,
+  'Seedling' : IDL.Null,
+  'GardenInputs' : IDL.Null,
+  'Gallon1' : IDL.Null,
+  'Gallon5' : IDL.Null,
+});
+export const CreateProductInput = IDL.Record({
+  'image_key' : IDL.Opt(IDL.Text),
+  'name' : IDL.Text,
+  'price_cents' : IDL.Nat,
+  'description' : IDL.Text,
+  'inventory_category' : IDL.Opt(InventoryCategory),
+  'image_keys' : IDL.Vec(IDL.Text),
+  'category' : ProductCategory,
+  'variety' : IDL.Opt(IDL.Text),
+  'plant_id' : IDL.Opt(PlantId),
+});
+export const ProductId = IDL.Nat;
+export const ProductPublic = IDL.Record({
+  'id' : ProductId,
+  'active' : IDL.Bool,
+  'image_key' : IDL.Opt(IDL.Text),
+  'name' : IDL.Text,
+  'price_cents' : IDL.Nat,
+  'description' : IDL.Text,
+  'inventory_category' : IDL.Opt(InventoryCategory),
+  'image_keys' : IDL.Vec(IDL.Text),
+  'category' : ProductCategory,
+  'variety' : IDL.Opt(IDL.Text),
+  'plant_id' : IDL.Opt(PlantId),
+});
+export const BulkCreateResult = IDL.Variant({
+  'ok' : ProductPublic,
+  'err' : IDL.Text,
+});
 export const CounterOfferInput = IDL.Record({
   'counter_amount' : IDL.Nat,
   'offer_id' : IDL.Text,
@@ -202,7 +246,6 @@ export const ProposalPublic = IDL.Record({
   'options' : IDL.Vec(IDL.Text),
   'proposal_type' : ProposalType,
 });
-export const ProductId = IDL.Nat;
 export const OrderItem = IDL.Record({
   'product_id' : ProductId,
   'price_cents' : IDL.Nat,
@@ -231,8 +274,30 @@ export const OrderPublic = IDL.Record({
   'items' : IDL.Vec(OrderItem),
   'total_cents' : IDL.Nat,
 });
+export const ContainerSize = IDL.Variant({
+  'Gal5Bucket' : IDL.Null,
+  'Gal1' : IDL.Null,
+  'Gal3' : IDL.Null,
+  'Gal5' : IDL.Null,
+  'Oz16' : IDL.Null,
+  'Gal7GrowBag' : IDL.Null,
+  'Cell72' : IDL.Null,
+  'Pot4Inch' : IDL.Null,
+  'InGround' : IDL.Null,
+  'Pot6Inch' : IDL.Null,
+  'Gal10GrowBag' : IDL.Null,
+  'Gal1New' : IDL.Null,
+  'Gal3New' : IDL.Null,
+  'Gal7Pot' : IDL.Null,
+  'Cell128' : IDL.Null,
+  'Gal15GrowBag' : IDL.Null,
+  'Gal5GrowBag' : IDL.Null,
+  'Other' : IDL.Text,
+});
 export const TrayId = IDL.Nat;
 export const CreatePlantInput = IDL.Record({
+  'container_size' : IDL.Opt(ContainerSize),
+  'date_purchased' : IDL.Opt(Timestamp),
   'origin' : IDL.Opt(IDL.Text),
   'common_name' : IDL.Opt(IDL.Text),
   'source_plant_id' : IDL.Opt(PlantId),
@@ -247,14 +312,6 @@ export const CreatePlantInput = IDL.Record({
   'variety' : IDL.Text,
   'nft_standard' : NFTStandard,
   'latin_name' : IDL.Opt(IDL.Text),
-});
-export const ContainerSize = IDL.Variant({
-  'Gal1' : IDL.Null,
-  'Gal3' : IDL.Null,
-  'Gal5' : IDL.Null,
-  'Oz16' : IDL.Null,
-  'InGround' : IDL.Null,
-  'Other' : IDL.Text,
 });
 export const PlantStage = IDL.Variant({
   'Seedling' : IDL.Null,
@@ -310,43 +367,6 @@ export const PostPublic = IDL.Record({
   'author_username' : IDL.Opt(IDL.Text),
   'is_anonymous' : IDL.Bool,
   'caller_liked' : IDL.Bool,
-});
-export const InventoryCategory = IDL.Variant({
-  'OtherSize' : IDL.Text,
-  'Gal1' : IDL.Null,
-  'Gal3' : IDL.Null,
-  'Gal5' : IDL.Null,
-  'Oz16' : IDL.Null,
-  'InGround' : IDL.Null,
-});
-export const ProductCategory = IDL.Variant({
-  'Spice' : IDL.Null,
-  'Seedling' : IDL.Null,
-  'GardenInputs' : IDL.Null,
-  'Gallon1' : IDL.Null,
-  'Gallon5' : IDL.Null,
-});
-export const CreateProductInput = IDL.Record({
-  'image_key' : IDL.Opt(IDL.Text),
-  'name' : IDL.Text,
-  'price_cents' : IDL.Nat,
-  'description' : IDL.Text,
-  'inventory_category' : IDL.Opt(InventoryCategory),
-  'category' : ProductCategory,
-  'variety' : IDL.Opt(IDL.Text),
-  'plant_id' : IDL.Opt(PlantId),
-});
-export const ProductPublic = IDL.Record({
-  'id' : ProductId,
-  'active' : IDL.Bool,
-  'image_key' : IDL.Opt(IDL.Text),
-  'name' : IDL.Text,
-  'price_cents' : IDL.Nat,
-  'description' : IDL.Text,
-  'inventory_category' : IDL.Opt(InventoryCategory),
-  'category' : ProductCategory,
-  'variety' : IDL.Opt(IDL.Text),
-  'plant_id' : IDL.Opt(PlantId),
 });
 export const CreateRecipeInput = IDL.Record({
   'photo_key' : IDL.Opt(IDL.Text),
@@ -680,6 +700,7 @@ export const UpdateProductInput = IDL.Record({
   'name' : IDL.Opt(IDL.Text),
   'price_cents' : IDL.Opt(IDL.Nat),
   'description' : IDL.Opt(IDL.Text),
+  'image_keys' : IDL.Opt(IDL.Vec(IDL.Text)),
 });
 export const UpdateRecipeInput = IDL.Record({
   'id' : RecipeId,
@@ -751,6 +772,11 @@ export const idlService = IDL.Service({
       [],
     ),
   'beginArtworkUpload' : IDL.Func([IDL.Nat], [], []),
+  'bulkCreateProducts' : IDL.Func(
+      [IDL.Vec(CreateProductInput)],
+      [IDL.Vec(BulkCreateResult)],
+      [],
+    ),
   'buyResaleListing' : IDL.Func(
       [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
@@ -786,9 +812,13 @@ export const idlService = IDL.Service({
       [TransformationOutput],
       ['query'],
     ),
+  'deletePost' : IDL.Func([PostId], [], []),
   'deleteProduct' : IDL.Func([ProductId], [], []),
   'deleteRecipe' : IDL.Func([RecipeId], [IDL.Bool], []),
   'deleteTray' : IDL.Func([TrayId], [], []),
+  'editPost' : IDL.Func([PostId, IDL.Text], [PostPublic], []),
+  'ensureAdminProfile' : IDL.Func([], [], []),
+  'ensureCallerProfile' : IDL.Func([], [], []),
   'finalizeArtworkUpload' : IDL.Func([], [UploadResult], []),
   'followUser' : IDL.Func([IDL.Principal], [], []),
   'generateAllPoolNFTs' : IDL.Func([], [IDL.Nat], []),
@@ -804,6 +834,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+  'getAdminPrincipals' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
   'getArtworkFile' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Vec(IDL.Nat8))], []),
   'getArtworkUploadResult' : IDL.Func([], [UploadResult], ['query']),
   'getArtworkUploadStatus' : IDL.Func([], [UploadSessionStatus], ['query']),
@@ -1201,6 +1232,50 @@ export const idlFactory = ({ IDL }) => {
     'recipient' : IDL.Principal,
     'standard' : NFTStandard,
   });
+  const InventoryCategory = IDL.Variant({
+    'OtherSize' : IDL.Text,
+    'Gal1' : IDL.Null,
+    'Gal3' : IDL.Null,
+    'Gal5' : IDL.Null,
+    'Oz16' : IDL.Null,
+    'InGround' : IDL.Null,
+  });
+  const ProductCategory = IDL.Variant({
+    'Spice' : IDL.Null,
+    'Seedling' : IDL.Null,
+    'GardenInputs' : IDL.Null,
+    'Gallon1' : IDL.Null,
+    'Gallon5' : IDL.Null,
+  });
+  const CreateProductInput = IDL.Record({
+    'image_key' : IDL.Opt(IDL.Text),
+    'name' : IDL.Text,
+    'price_cents' : IDL.Nat,
+    'description' : IDL.Text,
+    'inventory_category' : IDL.Opt(InventoryCategory),
+    'image_keys' : IDL.Vec(IDL.Text),
+    'category' : ProductCategory,
+    'variety' : IDL.Opt(IDL.Text),
+    'plant_id' : IDL.Opt(PlantId),
+  });
+  const ProductId = IDL.Nat;
+  const ProductPublic = IDL.Record({
+    'id' : ProductId,
+    'active' : IDL.Bool,
+    'image_key' : IDL.Opt(IDL.Text),
+    'name' : IDL.Text,
+    'price_cents' : IDL.Nat,
+    'description' : IDL.Text,
+    'inventory_category' : IDL.Opt(InventoryCategory),
+    'image_keys' : IDL.Vec(IDL.Text),
+    'category' : ProductCategory,
+    'variety' : IDL.Opt(IDL.Text),
+    'plant_id' : IDL.Opt(PlantId),
+  });
+  const BulkCreateResult = IDL.Variant({
+    'ok' : ProductPublic,
+    'err' : IDL.Text,
+  });
   const CounterOfferInput = IDL.Record({
     'counter_amount' : IDL.Nat,
     'offer_id' : IDL.Text,
@@ -1257,7 +1332,6 @@ export const idlFactory = ({ IDL }) => {
     'options' : IDL.Vec(IDL.Text),
     'proposal_type' : ProposalType,
   });
-  const ProductId = IDL.Nat;
   const OrderItem = IDL.Record({
     'product_id' : ProductId,
     'price_cents' : IDL.Nat,
@@ -1286,8 +1360,30 @@ export const idlFactory = ({ IDL }) => {
     'items' : IDL.Vec(OrderItem),
     'total_cents' : IDL.Nat,
   });
+  const ContainerSize = IDL.Variant({
+    'Gal5Bucket' : IDL.Null,
+    'Gal1' : IDL.Null,
+    'Gal3' : IDL.Null,
+    'Gal5' : IDL.Null,
+    'Oz16' : IDL.Null,
+    'Gal7GrowBag' : IDL.Null,
+    'Cell72' : IDL.Null,
+    'Pot4Inch' : IDL.Null,
+    'InGround' : IDL.Null,
+    'Pot6Inch' : IDL.Null,
+    'Gal10GrowBag' : IDL.Null,
+    'Gal1New' : IDL.Null,
+    'Gal3New' : IDL.Null,
+    'Gal7Pot' : IDL.Null,
+    'Cell128' : IDL.Null,
+    'Gal15GrowBag' : IDL.Null,
+    'Gal5GrowBag' : IDL.Null,
+    'Other' : IDL.Text,
+  });
   const TrayId = IDL.Nat;
   const CreatePlantInput = IDL.Record({
+    'container_size' : IDL.Opt(ContainerSize),
+    'date_purchased' : IDL.Opt(Timestamp),
     'origin' : IDL.Opt(IDL.Text),
     'common_name' : IDL.Opt(IDL.Text),
     'source_plant_id' : IDL.Opt(PlantId),
@@ -1302,14 +1398,6 @@ export const idlFactory = ({ IDL }) => {
     'variety' : IDL.Text,
     'nft_standard' : NFTStandard,
     'latin_name' : IDL.Opt(IDL.Text),
-  });
-  const ContainerSize = IDL.Variant({
-    'Gal1' : IDL.Null,
-    'Gal3' : IDL.Null,
-    'Gal5' : IDL.Null,
-    'Oz16' : IDL.Null,
-    'InGround' : IDL.Null,
-    'Other' : IDL.Text,
   });
   const PlantStage = IDL.Variant({
     'Seedling' : IDL.Null,
@@ -1365,43 +1453,6 @@ export const idlFactory = ({ IDL }) => {
     'author_username' : IDL.Opt(IDL.Text),
     'is_anonymous' : IDL.Bool,
     'caller_liked' : IDL.Bool,
-  });
-  const InventoryCategory = IDL.Variant({
-    'OtherSize' : IDL.Text,
-    'Gal1' : IDL.Null,
-    'Gal3' : IDL.Null,
-    'Gal5' : IDL.Null,
-    'Oz16' : IDL.Null,
-    'InGround' : IDL.Null,
-  });
-  const ProductCategory = IDL.Variant({
-    'Spice' : IDL.Null,
-    'Seedling' : IDL.Null,
-    'GardenInputs' : IDL.Null,
-    'Gallon1' : IDL.Null,
-    'Gallon5' : IDL.Null,
-  });
-  const CreateProductInput = IDL.Record({
-    'image_key' : IDL.Opt(IDL.Text),
-    'name' : IDL.Text,
-    'price_cents' : IDL.Nat,
-    'description' : IDL.Text,
-    'inventory_category' : IDL.Opt(InventoryCategory),
-    'category' : ProductCategory,
-    'variety' : IDL.Opt(IDL.Text),
-    'plant_id' : IDL.Opt(PlantId),
-  });
-  const ProductPublic = IDL.Record({
-    'id' : ProductId,
-    'active' : IDL.Bool,
-    'image_key' : IDL.Opt(IDL.Text),
-    'name' : IDL.Text,
-    'price_cents' : IDL.Nat,
-    'description' : IDL.Text,
-    'inventory_category' : IDL.Opt(InventoryCategory),
-    'category' : ProductCategory,
-    'variety' : IDL.Opt(IDL.Text),
-    'plant_id' : IDL.Opt(PlantId),
   });
   const CreateRecipeInput = IDL.Record({
     'photo_key' : IDL.Opt(IDL.Text),
@@ -1732,6 +1783,7 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Opt(IDL.Text),
     'price_cents' : IDL.Opt(IDL.Nat),
     'description' : IDL.Opt(IDL.Text),
+    'image_keys' : IDL.Opt(IDL.Vec(IDL.Text)),
   });
   const UpdateRecipeInput = IDL.Record({
     'id' : RecipeId,
@@ -1803,6 +1855,11 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'beginArtworkUpload' : IDL.Func([IDL.Nat], [], []),
+    'bulkCreateProducts' : IDL.Func(
+        [IDL.Vec(CreateProductInput)],
+        [IDL.Vec(BulkCreateResult)],
+        [],
+      ),
     'buyResaleListing' : IDL.Func(
         [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
@@ -1838,9 +1895,13 @@ export const idlFactory = ({ IDL }) => {
         [TransformationOutput],
         ['query'],
       ),
+    'deletePost' : IDL.Func([PostId], [], []),
     'deleteProduct' : IDL.Func([ProductId], [], []),
     'deleteRecipe' : IDL.Func([RecipeId], [IDL.Bool], []),
     'deleteTray' : IDL.Func([TrayId], [], []),
+    'editPost' : IDL.Func([PostId, IDL.Text], [PostPublic], []),
+    'ensureAdminProfile' : IDL.Func([], [], []),
+    'ensureCallerProfile' : IDL.Func([], [], []),
     'finalizeArtworkUpload' : IDL.Func([], [UploadResult], []),
     'followUser' : IDL.Func([IDL.Principal], [], []),
     'generateAllPoolNFTs' : IDL.Func([], [IDL.Nat], []),
@@ -1856,6 +1917,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+    'getAdminPrincipals' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
     'getArtworkFile' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Vec(IDL.Nat8))], []),
     'getArtworkUploadResult' : IDL.Func([], [UploadResult], ['query']),
     'getArtworkUploadStatus' : IDL.Func([], [UploadSessionStatus], ['query']),

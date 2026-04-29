@@ -26,6 +26,7 @@ import {
   FileText,
   Grid3X3,
   HelpCircle,
+  LayoutDashboard,
   LayoutList,
   Leaf,
   Loader2,
@@ -1098,9 +1099,295 @@ function ListView({
   );
 }
 
+// ─── Garden Layout View ───────────────────────────────────────────────────────
+
+interface GardenLayoutProps {
+  trays: TrayPublic[];
+  plants: PlantPublic[];
+  onCellClick: (
+    tray: TrayPublic,
+    cellIndex: number,
+    plant: PlantPublic | null,
+  ) => void;
+}
+
+function GardenLayout({ trays, plants, onCellClick }: GardenLayoutProps) {
+  const inGroundPlants = useMemo(
+    () =>
+      plants.filter(
+        (p) =>
+          p.container_size?.__kind__ === "InGround" ||
+          (!p.tray_id && !p.is_transplanted),
+      ),
+    [plants],
+  );
+
+  const trayPlantMap = useMemo(() => {
+    const m = new Map<string, Map<number, PlantPublic>>();
+    for (const p of plants) {
+      const tid = p.tray_id.toString();
+      if (!m.has(tid)) m.set(tid, new Map());
+      m.get(tid)!.set(Number(p.cell_position), p);
+    }
+    return m;
+  }, [plants]);
+
+  if (trays.length === 0 && inGroundPlants.length === 0) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-20 gap-4 bg-card rounded-lg border border-border"
+        data-ocid="garden-layout-empty"
+      >
+        <Leaf className="w-12 h-12 text-muted-foreground opacity-30" />
+        <h3 className="font-semibold text-foreground">No inventory yet</h3>
+        <p className="text-muted-foreground text-sm">
+          Add trays and plants to see your garden layout.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-ocid="garden-layout-view">
+      {/* Plan header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-display font-bold text-lg text-foreground">
+            Garden Floor Plan
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Top-down schematic view of your grow space — click any cell to open
+            plant details
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="border-emerald-700/40 text-emerald-400 text-xs"
+        >
+          {trays.length} tray{trays.length !== 1 ? "s" : ""} · {plants.length}{" "}
+          plant{plants.length !== 1 ? "s" : ""}
+        </Badge>
+      </div>
+
+      {/* Layout canvas */}
+      <div
+        className="bg-[oklch(0.12_0.01_145/0.6)] border border-emerald-900/30 rounded-2xl p-6 overflow-x-auto"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg,oklch(0.35 0.06 145/0.08) 0,oklch(0.35 0.06 145/0.08) 1px,transparent 1px,transparent 40px),repeating-linear-gradient(90deg,oklch(0.35 0.06 145/0.08) 0,oklch(0.35 0.06 145/0.08) 1px,transparent 1px,transparent 40px)",
+        }}
+      >
+        <div className="space-y-8 min-w-[600px]">
+          {/* Trays */}
+          {trays.map((tray, trayIdx) => {
+            const cellMap = trayPlantMap.get(tray.id.toString()) ?? new Map();
+            const COLS = 12;
+            const ROWS = 6;
+            const activeCount = Array.from(cellMap.values()).filter(
+              (p) => !p.is_cooked && !p.is_transplanted,
+            ).length;
+
+            return (
+              <motion.div
+                key={tray.id.toString()}
+                className="space-y-2"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: trayIdx * 0.07 }}
+                data-ocid={`layout-tray-${trayIdx + 1}`}
+              >
+                {/* Tray label bar */}
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-emerald-900/40" />
+                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-emerald-500/80 px-2">
+                    {tray.name}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/50 font-mono">
+                    {activeCount}/{COLS * ROWS} active
+                  </span>
+                  <div className="h-px flex-1 bg-emerald-900/40" />
+                </div>
+
+                {/* Tray rectangle */}
+                <div
+                  className="border border-emerald-700/25 rounded-lg p-2 bg-card/30"
+                  style={{
+                    boxShadow: "inset 0 1px 8px oklch(0.2 0.05 145/0.15)",
+                  }}
+                >
+                  <div
+                    className="grid gap-0.5"
+                    style={{
+                      gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {Array.from({ length: COLS * ROWS }, (_, i) => {
+                      const plant = cellMap.get(i);
+                      let cellBg = "bg-muted/10 border-border/30";
+                      let cellText = "";
+                      let emoji = "";
+
+                      if (plant) {
+                        if (plant.is_cooked) {
+                          cellBg = "bg-red-950/70 border-red-900/60";
+                          emoji = "💀";
+                        } else if (plant.is_transplanted) {
+                          cellBg = "bg-muted/20 border-muted/30 opacity-50";
+                          cellText = "text-muted-foreground/50";
+                        } else if (plant.stage === PlantStage.Mature) {
+                          cellBg = "bg-primary/25 border-primary/40";
+                          cellText = "text-primary";
+                        } else if (plant.stage === PlantStage.Seedling) {
+                          cellBg = "bg-cyan-950/60 border-cyan-700/40";
+                          cellText = "text-cyan-300";
+                        } else {
+                          cellBg = "bg-emerald-950/60 border-emerald-700/40";
+                          cellText = "text-emerald-300";
+                        }
+                      }
+
+                      const name = plant
+                        ? (plant.common_name || plant.variety).slice(0, 6)
+                        : "";
+
+                      return (
+                        <button
+                          key={`layout-${tray.id}-${i}`}
+                          type="button"
+                          onClick={() => onCellClick(tray, i, plant ?? null)}
+                          className={[
+                            "relative border rounded-sm flex flex-col items-center justify-center aspect-square transition-smooth hover:scale-105 hover:z-10",
+                            cellBg,
+                          ].join(" ")}
+                          style={{ minHeight: "28px" }}
+                          title={
+                            plant
+                              ? `${plant.common_name || plant.variety} — Cell ${i + 1}`
+                              : `Cell ${i + 1} — Empty`
+                          }
+                          data-ocid="layout-cell"
+                        >
+                          <span className="text-[7px] text-muted-foreground/30 font-mono absolute top-0 left-0.5 leading-none">
+                            {i + 1}
+                          </span>
+                          {emoji ? (
+                            <span className="text-[9px] leading-none">
+                              {emoji}
+                            </span>
+                          ) : name ? (
+                            <span
+                              className={`text-[7px] font-semibold leading-none text-center px-0.5 truncate w-full ${cellText}`}
+                            >
+                              {name}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+
+          {/* In Ground Zone */}
+          {inGroundPlants.length > 0 && (
+            <motion.div
+              className="space-y-2"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: trays.length * 0.07 }}
+              data-ocid="layout-inground-zone"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-amber-900/40" />
+                <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-amber-500/80 px-2">
+                  In Ground Crops
+                </span>
+                <span className="text-[9px] text-muted-foreground/50 font-mono">
+                  {inGroundPlants.length} plant
+                  {inGroundPlants.length !== 1 ? "s" : ""}
+                </span>
+                <div className="h-px flex-1 bg-amber-900/40" />
+              </div>
+
+              <div
+                className="border border-amber-700/25 rounded-xl p-3 bg-card/30 min-h-[80px]"
+                style={{ boxShadow: "inset 0 1px 8px oklch(0.2 0.06 80/0.15)" }}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {inGroundPlants.map((p) => (
+                    <div
+                      key={p.id.toString()}
+                      className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg border border-amber-700/30 bg-amber-950/30 min-w-[64px] text-center"
+                      data-ocid="layout-inground-plant"
+                    >
+                      <span className="text-sm">🌿</span>
+                      <span className="text-[9px] font-semibold text-amber-300 leading-tight max-w-[60px] truncate">
+                        {p.common_name || p.variety}
+                      </span>
+                      {p.latin_name && (
+                        <span className="text-[8px] text-amber-400/60 italic leading-none max-w-[60px] truncate">
+                          {p.latin_name}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-5 flex-wrap text-xs text-muted-foreground bg-card/50 border border-border rounded-lg px-4 py-2.5">
+        <span className="font-semibold text-foreground text-[10px] tracking-wide uppercase mr-1">
+          Legend
+        </span>
+        {[
+          {
+            cls: "w-3 h-3 rounded-sm bg-muted/10 border border-border/30 inline-block",
+            label: "Empty",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-emerald-950/60 border border-emerald-700/40 inline-block",
+            label: "Seeded",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-cyan-950/60 border border-cyan-700/40 inline-block",
+            label: "Seedling",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-primary/25 border border-primary/40 inline-block",
+            label: "Mature",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-muted/20 border border-muted/30 opacity-50 inline-block",
+            label: "Transplanted",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-red-950/70 border border-red-900/60 inline-block",
+            label: "Cooked",
+          },
+          {
+            cls: "w-3 h-3 rounded-sm bg-amber-950/30 border border-amber-700/25 inline-block",
+            label: "In Ground",
+          },
+        ].map(({ cls, label }) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className={cls} />
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── NIMS Page ────────────────────────────────────────────────────────────────
 
-type ViewMode = "grid" | "list";
+type ViewMode = "grid" | "list" | "layout";
 
 function NIMSPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -1297,6 +1584,20 @@ function NIMSPage() {
                 >
                   <LayoutList className="w-3.5 h-3.5" />
                   List
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("layout")}
+                  className={[
+                    "flex items-center gap-1 px-2.5 py-1 rounded text-sm font-medium transition-smooth",
+                    viewMode === "layout"
+                      ? "bg-card text-primary shadow-subtle"
+                      : "text-muted-foreground hover:text-foreground",
+                  ].join(" ")}
+                  data-ocid="nims-view-layout"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  Layout
                 </button>
               </div>
 
@@ -1558,6 +1859,25 @@ function NIMSPage() {
                     onRowClick={openPlantFromList}
                   />
                 </div>
+              )}
+
+              {/* Garden Layout view */}
+              {viewMode === "layout" && (
+                <GardenLayout
+                  trays={trays}
+                  plants={filteredPlants}
+                  onCellClick={(tray, cellIndex, plant) => {
+                    if (!plant) {
+                      setNewSeedState({
+                        open: true,
+                        trayId: tray.id,
+                        cellIndex,
+                      });
+                    } else {
+                      setCellModalState({ open: true, cellIndex, plant, tray });
+                    }
+                  }}
+                />
               )}
             </div>
 

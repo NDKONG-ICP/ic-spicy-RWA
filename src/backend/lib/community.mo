@@ -7,6 +7,7 @@ import Time "mo:core/Time";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
 import Int "mo:core/Int";
+import Text "mo:core/Text";
 
 module {
   public func createPost(
@@ -20,7 +21,7 @@ module {
       id = nextId;
       author = author;
       anonymous = input.anonymous;
-      content = input.content;
+      var content = input.content;
       image_key = input.image_key;
       likes = Set.empty<Principal>();
       created_at = now;
@@ -28,6 +29,53 @@ module {
     };
     posts.add(nextId, post);
     postToPublic(post, author, 0, null);
+  };
+
+  // 48 hours in nanoseconds (48 * 3600 * 1_000_000_000)
+  let EDIT_WINDOW_NS : Int = 172_800_000_000_000;
+
+  public func editPost(
+    posts : Map.Map<Common.PostId, Types.Post>,
+    caller : Principal,
+    post_id : Common.PostId,
+    new_content : Text,
+  ) : Types.PostPublic {
+    switch (posts.get(post_id)) {
+      case (?post) {
+        if (post.author != caller) {
+          Runtime.trap("Unauthorized: can only edit your own posts");
+        };
+        let now = Time.now();
+        if (now - post.created_at > EDIT_WINDOW_NS) {
+          Runtime.trap("Post is immutable: 48-hour edit window has passed");
+        };
+        post.content := new_content;
+        // image_key is immutable — it cannot be changed after posting
+        post.updated_at := now;
+        postToPublic(post, caller, 0, null);
+      };
+      case null { Runtime.trap("Post not found") };
+    };
+  };
+
+  public func deletePost(
+    posts : Map.Map<Common.PostId, Types.Post>,
+    caller : Principal,
+    post_id : Common.PostId,
+  ) : () {
+    switch (posts.get(post_id)) {
+      case (?post) {
+        if (post.author != caller) {
+          Runtime.trap("Unauthorized: can only delete your own posts");
+        };
+        let now = Time.now();
+        if (now - post.created_at > EDIT_WINDOW_NS) {
+          Runtime.trap("Post is immutable: 48-hour delete window has passed");
+        };
+        posts.remove(post_id);
+      };
+      case null { Runtime.trap("Post not found") };
+    };
   };
 
   public func likePost(
@@ -113,6 +161,33 @@ module {
         profile.follows.remove(target);
       };
       case null {};
+    };
+  };
+
+  // Idempotent: creates a minimal profile for any authenticated caller if one
+  // does not already exist. Uses the first 8 characters of the principal text
+  // as the default username and leaves bio empty. Safe to call multiple times.
+  public func ensureCallerProfile(
+    profiles : Map.Map<Principal, Types.UserProfile>,
+    caller : Principal,
+  ) : () {
+    switch (profiles.get(caller)) {
+      case (?_) {};
+      case null {
+        let callerText = caller.toText();
+        let defaultUsername = if (callerText.size() > 8) {
+          Text.fromIter(callerText.chars().take(8))
+        } else { callerText };
+        let profile : Types.UserProfile = {
+          principal_id = caller;
+          var username = defaultUsername;
+          var bio = "";
+          var avatar_key = null;
+          var follows = Set.empty<Principal>();
+          created_at = Time.now();
+        };
+        profiles.add(caller, profile);
+      };
     };
   };
 

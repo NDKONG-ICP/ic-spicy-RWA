@@ -809,12 +809,14 @@ const SKELETON_BALANCE_IDS = [
 const SKELETON_TX_IDS = ["sk-t1", "sk-t2", "sk-t3", "sk-t4", "sk-t5"] as const;
 
 export default function WalletPage() {
-  const { isAuthenticated, login, isInitializing } = useAuth();
+  const { isAuthenticated, login, isInitializing, principal } = useAuth();
+  const [walletIdCopied, setWalletIdCopied] = useState(false);
   const { data: balances, isLoading: loadingBalances } = useWalletBalances();
   const { data: transactions, isLoading: loadingTxs } = useWalletTransactions();
   const { data: walletAddress = "" } = useWalletAddress();
   const { data: tokenPrices = [], dataUpdatedAt } = useTokenPrices();
 
+  const principalId = principal?.toText() ?? "";
   const tokens: WalletToken[] = balances ?? [];
   const txList: WalletTransaction[] = transactions ?? [];
 
@@ -834,6 +836,15 @@ export default function WalletPage() {
   function copyAddress() {
     navigator.clipboard.writeText(walletAddress).then(() => {
       toast.success("Address copied!");
+    });
+  }
+
+  function copyPrincipalId() {
+    if (!principalId) return;
+    navigator.clipboard.writeText(principalId).then(() => {
+      setWalletIdCopied(true);
+      toast.success("Wallet ID copied to clipboard!");
+      setTimeout(() => setWalletIdCopied(false), 2500);
     });
   }
 
@@ -872,7 +883,57 @@ export default function WalletPage() {
       className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8"
       data-ocid="wallet-page"
     >
-      {/* Page Header */}
+      {/* ── PRINCIPAL ID DIAGNOSTIC BANNER ─────────────────────────────────────
+          This banner is intentionally the very first element so the user can
+          immediately see which principal Internet Identity assigned them.
+          Compare this value to the admin list if the admin tab is not working.
+      ──────────────────────────────────────────────────────────────────────── */}
+      {principalId && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border-2 border-yellow-500/60 bg-yellow-500/10 p-4"
+          data-ocid="wallet-principal-banner"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-1">
+                Your Internet Identity Principal ID
+              </p>
+              <p className="text-[11px] text-yellow-300/70 mb-2">
+                Copy this and compare it to the admin list if the Admin panel
+                shows "Access Restricted"
+              </p>
+              <div
+                className="rounded-lg bg-black/30 border border-yellow-500/30 px-3 py-2 font-mono text-sm text-yellow-100 break-all select-all leading-relaxed"
+                data-ocid="wallet-principal-id-text"
+              >
+                {principalId}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyPrincipalId}
+              className="shrink-0 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/20 gap-1.5 self-start sm:self-center"
+              aria-label="Copy principal ID"
+              data-ocid="wallet-principal-copy-btn"
+            >
+              {walletIdCopied ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-xs text-emerald-400">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span className="text-xs">Copy ID</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </motion.div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -921,6 +982,65 @@ export default function WalletPage() {
               {priceUpdatedAt}
             </span>
           </span>
+        </motion.div>
+      )}
+
+      {/* Wallet ID — user's on-chain Internet Identity principal */}
+      {principalId && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="bg-card border-border" data-ocid="wallet-id-card">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                    <Flame className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground leading-tight">
+                      Your Wallet ID
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Internet Identity principal · on-chain identity
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyPrincipalId}
+                  className="shrink-0 border-border gap-1.5"
+                  aria-label="Copy wallet ID"
+                  data-ocid="wallet-id-copy-btn"
+                >
+                  {walletIdCopied ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-xs text-emerald-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span className="text-xs">Copy</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div
+                className="rounded-lg bg-secondary/60 border border-border px-3 py-2.5 font-mono text-xs text-foreground break-all select-all leading-relaxed"
+                data-ocid="wallet-id-display"
+              >
+                {principalId}
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                This is your unique on-chain identity. Share it to receive NFTs
+                or be identified in the IC ecosystem.
+              </p>
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 

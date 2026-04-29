@@ -15,8 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Leaf, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Camera, Leaf, Loader2, X } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { TrayPublic } from "../backend";
 import { NFTStandard } from "../backend";
@@ -24,8 +24,14 @@ import {
   useCreatePlant,
   useCreateTray,
   useDeleteTray,
+  useStorePhotoFile,
   useUpdateTrayName,
 } from "../hooks/useBackend";
+import {
+  CONTAINER_SIZE_OPTIONS,
+  buildContainerSize,
+  compressImage,
+} from "./nims-utils";
 
 interface TrayManagerProps {
   trays: TrayPublic[];
@@ -305,11 +311,60 @@ export function NewSeedModal({
   const [dateSowed, setDateSowed] = useState(
     new Date().toISOString().split("T")[0],
   );
+  const [datePurchased, setDatePurchased] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [containerOption, setContainerOption] = useState("cell72");
+  const [containerOther, setContainerOther] = useState("");
+
+  // Photo upload state
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const createPlant = useCreatePlant();
+  const storePhoto = useStorePhotoFile();
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    const url = URL.createObjectURL(file);
+    setPhotoPreview(url);
+  }
+
+  function clearPhoto() {
+    setPhotoFile(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(null);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    let photoKey: string | undefined;
+
+    // Upload photo if selected
+    if (photoFile) {
+      setUploadingPhoto(true);
+      try {
+        const compressed = await compressImage(photoFile);
+        const bytes = new Uint8Array(await compressed.arrayBuffer());
+        photoKey = await storePhoto.mutateAsync({
+          pathPrefix: "photos/plants",
+          data: bytes,
+          mimeType: "image/jpeg",
+        });
+      } catch (_e) {
+        toast.error("Photo upload failed — plant will be added without photo");
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
+
+    const containerSize = buildContainerSize(containerOption, containerOther);
+
     try {
       await createPlant.mutateAsync({
         tray_id: trayId,
@@ -321,25 +376,45 @@ export function NewSeedModal({
         latin_name: latinName || undefined,
         origin: origin || undefined,
         planting_date: BigInt(new Date(dateSowed).getTime() * 1_000_000),
+        date_purchased: datePurchased
+          ? BigInt(new Date(datePurchased).getTime() * 1_000_000)
+          : undefined,
         nft_standard: NFTStandard.ICRC37,
+        container_size: containerSize,
+        source_plant_id: undefined,
+        watering_schedule: undefined,
+        pest_notes: undefined,
+        additional_notes: undefined,
+        ...(photoKey ? { photo_key: [photoKey] } : { photo_key: [] }),
       });
-      toast.success("Seed planted!");
+      toast.success("Plant added!");
+      // Reset form
+      setCommonName("");
+      setLatinName("");
+      setVariety(VARIETIES[0]);
+      setOrigin("");
+      setDateSowed(new Date().toISOString().split("T")[0]);
+      setDatePurchased(new Date().toISOString().split("T")[0]);
+      setContainerOption("cell72");
+      setContainerOther("");
+      clearPhoto();
       onClose();
     } catch (_e) {
-      toast.error("Failed to plant seed");
+      toast.error("Failed to add plant");
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md bg-card border-border">
+      <DialogContent className="max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-foreground flex items-center gap-2">
             <Leaf className="w-5 h-5 text-primary" />
-            Plant Seed — Cell {cellIndex + 1}
+            Add Plant — Cell {cellIndex + 1}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Variety */}
           <div className="space-y-1.5">
             <Label className="text-foreground text-sm">Variety</Label>
             <Select value={variety} onValueChange={setVariety}>
@@ -358,6 +433,8 @@ export function NewSeedModal({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Common Name + Latin Name */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-foreground text-sm">Common Name</Label>
@@ -380,6 +457,8 @@ export function NewSeedModal({
               />
             </div>
           </div>
+
+          {/* Origin + Date Sowed */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-foreground text-sm">Origin</Label>
@@ -402,6 +481,109 @@ export function NewSeedModal({
               />
             </div>
           </div>
+
+          {/* Date Purchased/Planted */}
+          <div className="space-y-1.5">
+            <Label className="text-foreground text-sm">
+              Date Purchased / Planted
+            </Label>
+            <Input
+              type="date"
+              value={datePurchased}
+              onChange={(e) => setDatePurchased(e.target.value)}
+              className="bg-muted/30 border-border text-foreground"
+              data-ocid="new-seed-date-purchased"
+            />
+            <p className="text-xs text-muted-foreground">
+              Defaults to today. Edit to record the actual purchase or planting
+              date.
+            </p>
+          </div>
+
+          {/* Container Size */}
+          <div className="space-y-1.5">
+            <Label className="text-foreground text-sm">Container Size</Label>
+            <Select value={containerOption} onValueChange={setContainerOption}>
+              <SelectTrigger
+                className="bg-muted/30 border-border text-foreground"
+                data-ocid="new-seed-container"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                {CONTAINER_SIZE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {containerOption === "other" && (
+              <Input
+                value={containerOther}
+                onChange={(e) => setContainerOther(e.target.value)}
+                placeholder="Describe container size…"
+                className="bg-muted/30 border-border text-foreground mt-1.5"
+                data-ocid="new-seed-container-other"
+              />
+            )}
+          </div>
+
+          {/* Photo Upload */}
+          <div className="space-y-2">
+            <Label className="text-foreground text-sm">
+              Plant Photo{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional — helps with quick ID)
+              </span>
+            </Label>
+            {photoPreview ? (
+              <div className="relative inline-flex items-start gap-3">
+                <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-border bg-muted/20 flex-shrink-0">
+                  <img
+                    src={photoPreview}
+                    alt="Plant preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {photoFile?.name}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clearPhoto}
+                    className="h-7 text-xs border-border text-muted-foreground hover:text-red-400"
+                    data-ocid="new-seed-photo-clear"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="flex items-center gap-2 w-full border border-dashed border-border rounded-lg px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 transition-smooth"
+                data-ocid="new-seed-photo-upload-btn"
+              >
+                <Camera className="w-4 h-4 flex-shrink-0" />
+                <span>Click to upload or drag-and-drop a photo</span>
+              </button>
+            )}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+              data-ocid="new-seed-photo-input"
+            />
+          </div>
+
           <div className="flex gap-2 justify-end pt-2">
             <Button
               type="button"
@@ -413,16 +595,16 @@ export function NewSeedModal({
             </Button>
             <Button
               type="submit"
-              disabled={createPlant.isPending}
+              disabled={createPlant.isPending || uploadingPhoto}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
               data-ocid="new-seed-submit"
             >
-              {createPlant.isPending ? (
+              {createPlant.isPending || uploadingPhoto ? (
                 <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
               ) : (
                 <Leaf className="w-4 h-4 mr-1.5" />
               )}
-              Plant Seed
+              {uploadingPhoto ? "Uploading Photo…" : "Add Plant"}
             </Button>
           </div>
         </form>

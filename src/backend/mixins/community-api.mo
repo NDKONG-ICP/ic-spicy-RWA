@@ -23,6 +23,22 @@ mixin (
     post;
   };
 
+  // Authenticated: edit own post within 48 hours of creation
+  public shared ({ caller }) func editPost(post_id : Common.PostId, new_content : Text) : async CommunityTypes.PostPublic {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Must be logged in to edit posts");
+    };
+    CommunityLib.editPost(posts, caller, post_id, new_content);
+  };
+
+  // Authenticated: delete own post within 48 hours of creation
+  public shared ({ caller }) func deletePost(post_id : Common.PostId) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Must be logged in to delete posts");
+    };
+    CommunityLib.deletePost(posts, caller, post_id);
+  };
+
   // Authenticated: like a post — returns updated like count
   public shared ({ caller }) func likePost(post_id : Common.PostId) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -71,6 +87,15 @@ mixin (
       Runtime.trap("Unauthorized: Must be logged in to save profile");
     };
     CommunityLib.saveProfile(profiles, caller, input);
+  };
+
+  // Authenticated: ensure caller has a profile, creating one if absent.
+  // Idempotent — safe to call on every sign-in for any user.
+  public shared ({ caller }) func ensureCallerProfile() : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Must be logged in");
+    };
+    CommunityLib.ensureCallerProfile(profiles, caller);
   };
 
   // Authenticated: get caller's own profile

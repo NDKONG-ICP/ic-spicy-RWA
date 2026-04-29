@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { SiFacebook, SiInstagram, SiTiktok, SiX } from "react-icons/si";
 import { useAuth } from "../hooks/useAuth";
-import { useIsAdmin } from "../hooks/useBackend";
 import { useCart } from "../hooks/useCart";
 import { SOCIAL_LINKS } from "../types/index";
 
@@ -31,7 +30,6 @@ const SOCIAL_ICONS = [
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, login, logout, isInitializing } = useAuth();
-  const { data: isAdmin } = useIsAdmin();
   const itemCount = useCart((s) => s.itemCount());
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
@@ -89,21 +87,19 @@ export function Header() {
             >
               NIMS
             </Link>
-            {/* Admin link — only visible to the owner, zero DOM presence for everyone else */}
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className={[
-                  "px-3 py-2 rounded-md text-sm font-medium transition-smooth",
-                  currentPath === "/admin"
-                    ? "text-primary bg-primary/10"
-                    : "text-fire hover:text-fire/80 hover:bg-fire/10",
-                ].join(" ")}
-                data-ocid="header-admin-link"
-              >
-                Admin
-              </Link>
-            )}
+            {/* Admin link — always visible; access is gated inside the route */}
+            <Link
+              to="/admin"
+              className={[
+                "px-3 py-2 rounded-md text-sm font-medium transition-smooth",
+                currentPath === "/admin"
+                  ? "text-primary bg-primary/10"
+                  : "text-fire hover:text-fire/80 hover:bg-fire/10",
+              ].join(" ")}
+              data-ocid="header-admin-link"
+            >
+              Admin
+            </Link>
           </nav>
 
           {/* Right cluster */}
@@ -237,22 +233,20 @@ export function Header() {
               >
                 NIMS
               </Link>
-              {/* Admin mobile link — only for owner */}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={[
-                    "block px-3 py-2 rounded-md text-sm font-medium transition-smooth",
-                    currentPath === "/admin"
-                      ? "text-primary bg-primary/10"
-                      : "text-fire hover:text-fire/80 hover:bg-fire/10",
-                  ].join(" ")}
-                  onClick={() => setMobileOpen(false)}
-                  data-ocid="header-admin-link-mobile"
-                >
-                  Admin
-                </Link>
-              )}
+              {/* Admin mobile link — always visible; access is gated inside the route */}
+              <Link
+                to="/admin"
+                className={[
+                  "block px-3 py-2 rounded-md text-sm font-medium transition-smooth",
+                  currentPath === "/admin"
+                    ? "text-primary bg-primary/10"
+                    : "text-fire hover:text-fire/80 hover:bg-fire/10",
+                ].join(" ")}
+                onClick={() => setMobileOpen(false)}
+                data-ocid="header-admin-link-mobile"
+              >
+                Admin
+              </Link>
 
               <div className="pt-3 border-t border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">

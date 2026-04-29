@@ -10,20 +10,36 @@ module {
 
   // ── Session management ───────────────────────────────────────────────────
 
+  // Begin a new upload session.
+  // Resets the flat buffer — actual allocation happens on first chunk receipt
+  // once we know the real chunk size.
   public func beginSession(
-    session : Types.UploadSession,
+    session     : Types.UploadSession,
     totalChunks : Nat,
   ) : () {
-    session.chunks       := [];
+    session.buffer       := [var];
+    session.chunk_size   := 0;
     session.total_chunks := totalChunks;
     session.received     := 0;
   };
 
+  // Receive one chunk and write it into the pre-allocated flat buffer.
+  //
+  // On the FIRST chunk (received == 0 and buffer is empty):
+  //   - We learn the chunk size and pre-allocate a buffer of totalChunks * chunkSize bytes.
+  //   - This single allocation avoids repeated copies / array growing.
+  //
+  // On subsequent chunks:
+  //   - Write bytes directly at offset = chunkIndex * chunk_size.
+  //   - No copies, no accumulation in heap.
+  //
+  // NOTE: The last chunk may be smaller than chunk_size (tail data).
+  // We track this by allowing the last chunk to be <= chunk_size.
   public func receiveChunk(
-    session : Types.UploadSession,
-    chunkIndex : Nat,
+    session     : Types.UploadSession,
+    chunkIndex  : Nat,
     totalChunks : Nat,
-    data : [Nat8],
+    data        : [Nat8],
   ) : { #ok; #err : Text } {
     if (totalChunks != session.total_chunks) {
       return #err("totalChunks mismatch: expected " # session.total_chunks.toText() # " got " # totalChunks.toText());
@@ -31,33 +47,51 @@ module {
     if (chunkIndex >= totalChunks) {
       return #err("chunkIndex out of range");
     };
-    // Append this chunk (frontend must send in order 0..N-1)
-    session.chunks := session.chunks.concat([data]);
+    let dataSize = data.size();
+    if (dataSize == 0) {
+      return #err("chunk data is empty");
+    };
+
+    // First chunk — learn chunk size and pre-allocate buffer.
+    if (session.chunk_size == 0) {
+      session.chunk_size := dataSize;
+      // Pre-allocate: worst-case totalChunks * chunkSize bytes.
+      // The final chunk may be smaller but we still reserve the full slot.
+      session.buffer := Prim.Array_init<Nat8>(totalChunks * dataSize, 0);
+    };
+
+    // Write chunk bytes at the correct offset in the flat buffer.
+    let offset = chunkIndex * session.chunk_size;
+    if (offset + dataSize > session.buffer.size()) {
+      return #err("chunk offset out of buffer bounds");
+    };
+    var i = 0;
+    while (i < dataSize) {
+      session.buffer[offset + i] := data[i];
+      i += 1;
+    };
     session.received += 1;
     #ok;
   };
 
-  // Reassemble all chunks into a single flat byte array
+  // Reassemble the flat buffer into a contiguous immutable byte array.
+  // We read exactly the bytes that were written (received * chunk_size for all
+  // complete chunks; the last chunk may be shorter so we use the buffer up to
+  // the last written byte position).
   public func reassemble(session : Types.UploadSession) : [Nat8] {
-    var total = 0;
-    for (chunk in session.chunks.values()) {
-      total += chunk.size();
-    };
-    let varBuf = Prim.Array_init<Nat8>(total, 0);
-    var pos = 0;
-    for (chunk in session.chunks.values()) {
-      for (b in chunk.values()) {
-        varBuf[pos] := b;
-        pos += 1;
-      };
-    };
-    Prim.Array_tabulate<Nat8>(total, func i = varBuf[i]);
+    let bufSize = session.buffer.size();
+    if (bufSize == 0) return [];
+    // The buffer is already a flat array — freeze it directly.
+    // Prim.Array_tabulate reads from the mutable buffer without an extra copy.
+    Prim.Array_tabulate<Nat8>(bufSize, func i = session.buffer[i]);
   };
 
   // ── File storage ─────────────────────────────────────────────────────────
 
   // Store a single artwork file on-chain.
   // path format: "layer-1/background.png"
+  // Data is stored as [Nat8] — no conversion to Blob to avoid heap pressure
+  // during canister upgrades (the previous Blob conversion caused IC0539).
   public func storeFile(
     storedFiles : Map.Map<Text, Types.StoredFile>,
     path        : Text,

@@ -65,6 +65,11 @@ module {
     input : Types.CreatePlantInput,
     created_by : Principal,
   ) : Types.Plant {
+    let now = Time.now();
+    let purchasedAt = switch (input.date_purchased) {
+      case (?d) d;
+      case null now;
+    };
     let plant : Types.Plant = {
       id = nextId;
       variety = input.variety;
@@ -89,7 +94,7 @@ module {
       var additional_notes = input.additional_notes;
       var is_cooked = false;
       var is_transplanted = false;
-      var container_size = null;
+      var container_size = input.container_size;
       var for_sale = false;
       var photo_keys = [];
       var transplant_plant_id = null;
@@ -101,8 +106,8 @@ module {
     let history = List.empty<Types.StageHistory>();
     history.add({
       stage = #Seed;
-      timestamp = input.planting_date;
-      notes = "Planted";
+      timestamp = purchasedAt;
+      notes = "Planted/Purchased";
     });
     stageHistory.add(nextId, history);
     // Update tray cell
@@ -697,9 +702,21 @@ module {
   func containerSizeText(s : Types.ContainerSize) : Text {
     switch (s) {
       case (#Oz16) "16oz";
-      case (#Gal1) "1 Gallon";
-      case (#Gal3) "3 Gallon";
-      case (#Gal5) "5 Gallon";
+      case (#Gal1) "1 Gallon (legacy)";
+      case (#Gal3) "3 Gallon (legacy)";
+      case (#Gal5) "5 Gallon (legacy)";
+      case (#Cell72) "72 Cell Tray";
+      case (#Cell128) "128 Cell Tray";
+      case (#Pot4Inch) "4 Inch Pot";
+      case (#Pot6Inch) "6 Inch Pot";
+      case (#Gal1New) "1 Gallon";
+      case (#Gal3New) "3 Gallon";
+      case (#Gal5Bucket) "5 Gallon (Bucket)";
+      case (#Gal5GrowBag) "5 Gallon (Grow Bag)";
+      case (#Gal7Pot) "7 Gallon Pot";
+      case (#Gal7GrowBag) "7 Gallon Grow Bag";
+      case (#Gal10GrowBag) "10 Gallon Grow Bag";
+      case (#Gal15GrowBag) "15 Gallon Grow Bag";
       case (#InGround) "In Ground";
       case (#Other t) "Other: " # t;
     };

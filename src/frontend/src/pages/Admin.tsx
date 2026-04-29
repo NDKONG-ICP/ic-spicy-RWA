@@ -53,10 +53,11 @@ import {
   Users,
   Vote,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   NFTStandard,
@@ -80,6 +81,7 @@ import {
   useBatchAssignPoolNFTs,
   useBatchMintFoundersCollection,
   useBeginArtworkUpload,
+  useBulkCreateProducts,
   useCreateBatchGiftPack,
   useCreatePlant,
   useCreateProduct,
@@ -104,6 +106,7 @@ import {
   useProposals,
   useRefreshTokenPrices,
   useResetPoolNFT,
+  useStorePhotoFile,
   useTokenPrices,
   useTrays,
   useTreasuryBalances,
@@ -120,6 +123,7 @@ import {
 } from "../hooks/useBackend";
 import { CHILI_VARIETIES } from "../types/index";
 import type { Plant, Product, Tray } from "../types/index";
+import { compressImage } from "../utils/imageUtils";
 import AdminCookBookTab from "./AdminCookBookTab";
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -796,17 +800,424 @@ function PlantRow({ plant }: { plant: Plant }) {
 
 // ─── Products Tab ────────────────────────────────────────────────────────────
 
+// ─── Multi-Image Gallery Upload ──────────────────────────────────────────────
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_GALLERY_IMAGES = 5;
+
+interface GalleryUploadProps {
+  imageKeys: string[];
+  onChange: (keys: string[]) => void;
+}
+
+function GalleryUpload({ imageKeys, onChange }: GalleryUploadProps) {
+  const storePhoto = useStorePhotoFile();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const canAddMore = imageKeys.length < MAX_GALLERY_IMAGES;
+
+  const uploadFile = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!file.type.startsWith("image/")) return null;
+      if (file.size > MAX_PHOTO_BYTES) return null;
+      const compressed = await compressImage(file);
+      const arrayBuffer = await compressed.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      return storePhoto.mutateAsync({
+        pathPrefix: "shop-listings",
+        data,
+        mimeType: "image/jpeg",
+      });
+    },
+    [storePhoto],
+  );
+
+  const handleFiles = async (files: FileList | File[]) => {
+    setError(null);
+    const arr = Array.from(files);
+    const remaining = MAX_GALLERY_IMAGES - imageKeys.length;
+    const toUpload = arr.slice(0, remaining);
+    if (arr.length > remaining) {
+      setError(`Max ${MAX_GALLERY_IMAGES} images. Only ${remaining} added.`);
+    }
+    setUploadingCount(toUpload.length);
+    try {
+      const keys: string[] = [];
+      for (const file of toUpload) {
+        const key = await uploadFile(file);
+        if (key) keys.push(key);
+      }
+      onChange([...imageKeys, ...keys]);
+      if (keys.length > 0)
+        toast.success(
+          `${keys.length} photo${keys.length > 1 ? "s" : ""} uploaded!`,
+        );
+    } catch {
+      setError("Upload failed. Please try again.");
+      toast.error("Photo upload failed.");
+    } finally {
+      setUploadingCount(0);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!canAddMore) return;
+    handleFiles(e.dataTransfer.files);
+  };
+
+  const removeImage = (index: number) => {
+    onChange(imageKeys.filter((_, i) => i !== index));
+  };
+
+  const isUploading = uploadingCount > 0;
+
+  return (
+    <div className="space-y-3">
+      {/* Existing image thumbnails */}
+      {imageKeys.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {imageKeys.map((key, idx) => (
+            <div
+              key={key}
+              className="relative w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted/20 flex-shrink-0"
+            >
+              <img
+                src={`/api/object-storage/${key}`}
+                alt={`Listing ${idx + 1}`}
+                className="w-full h-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(idx)}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-card/90 border border-border flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                aria-label={`Remove photo ${idx + 1}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+              {idx === 0 && (
+                <span className="absolute bottom-0 left-0 right-0 text-center text-[9px] bg-card/80 text-primary py-0.5">
+                  Main
+                </span>
+              )}
+            </div>
+          ))}
+          {/* Upload-more slot */}
+          {canAddMore && !isUploading && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-20 h-20 rounded-lg border-2 border-dashed border-border hover:border-primary/40 bg-muted/10 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+              aria-label="Add more photos"
+              data-ocid="gallery-add-photo-btn"
+            >
+              <ImagePlus className="w-5 h-5" />
+              <span className="text-[9px]">Add photo</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Initial dropzone (no images yet) */}
+      {imageKeys.length === 0 && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+            data-ocid="gallery-photo-input"
+          />
+          {isUploading ? (
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/20"
+              data-ocid="gallery-uploading"
+            >
+              <RefreshCw className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Uploading {uploadingCount} photo{uploadingCount > 1 ? "s" : ""}…
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Upload listing photos"
+              className={`w-full border-2 border-dashed rounded-lg p-5 flex flex-col items-center gap-2 cursor-pointer transition-smooth ${
+                isDragOver
+                  ? "border-primary/70 bg-primary/5"
+                  : "border-border hover:border-primary/40 hover:bg-muted/10"
+              }`}
+              data-ocid="gallery-photo-dropzone"
+            >
+              <ImagePlus
+                className={`w-7 h-7 ${isDragOver ? "text-primary" : "text-muted-foreground"}`}
+              />
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Add up to {MAX_GALLERY_IMAGES} photos
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Drag & drop or click · JPG / PNG · Max 5 MB each
+                </p>
+              </div>
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Hidden file input for add-more (when images exist) */}
+      {imageKeys.length > 0 && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      )}
+
+      {/* Upload indicator when adding more */}
+      {isUploading && imageKeys.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+          Uploading {uploadingCount} photo{uploadingCount > 1 ? "s" : ""}…
+        </div>
+      )}
+
+      {error && (
+        <p
+          className="text-xs text-destructive flex items-center gap-1"
+          data-ocid="gallery-photo-error"
+        >
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          {error}
+        </p>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        {imageKeys.length}/{MAX_GALLERY_IMAGES} photos · First photo is the main
+        listing image
+      </p>
+    </div>
+  );
+}
+
+// Keep single-image ShopPhotoUpload for the Internal Catalog form (backward compat)
+
+interface ShopPhotoUploadProps {
+  imageKey: string | null;
+  onChange: (key: string | null) => void;
+}
+
+function ShopPhotoUpload({ imageKey, onChange }: ShopPhotoUploadProps) {
+  const storePhoto = useStorePhotoFile();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<{
+    original: number;
+    compressed: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    setError(null);
+    setCompressionInfo(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a JPG or PNG image.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError("Image must be under 5 MB.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const originalSize = file.size;
+      const compressed = await compressImage(file);
+      const compressedSize = compressed.size;
+      setCompressionInfo({
+        original: originalSize,
+        compressed: compressedSize,
+      });
+      const arrayBuffer = await compressed.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const key = await storePhoto.mutateAsync({
+        pathPrefix: "shop-listings",
+        data,
+        mimeType: "image/jpeg",
+      });
+      onChange(key);
+      toast.success("Photo uploaded!");
+    } catch {
+      setError("Upload failed. Please try again.");
+      toast.error("Photo upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  // Existing image (edit mode) — show preview with replace button
+  if (imageKey && !uploading) {
+    return (
+      <div className="space-y-2">
+        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/20">
+          <img
+            src={`/api/object-storage/${imageKey}`}
+            alt="Listing preview"
+            className="w-full h-full object-cover"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              onChange(null);
+              setCompressionInfo(null);
+            }}
+            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-card/90 border border-border flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+            aria-label="Remove photo"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {compressionInfo && (
+          <p className="text-[10px] text-muted-foreground">
+            Original: {Math.round(compressionInfo.original / 1024)} KB →
+            Compressed: {Math.round(compressionInfo.compressed / 1024)} KB
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+          data-ocid="shop-photo-replace-btn"
+        >
+          <ImagePlus className="w-3.5 h-3.5" />
+          Replace photo
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFile(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleFile(f);
+          e.target.value = "";
+        }}
+        data-ocid="shop-photo-input"
+      />
+      {uploading ? (
+        <div
+          className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/20"
+          data-ocid="shop-photo-uploading"
+        >
+          <RefreshCw className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
+          <p className="text-sm text-muted-foreground">Uploading photo…</p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Upload listing photo"
+          className={`w-full border-2 border-dashed rounded-lg p-5 flex flex-col items-center gap-2 cursor-pointer transition-smooth ${
+            isDragOver
+              ? "border-primary/70 bg-primary/5"
+              : "border-border hover:border-primary/40 hover:bg-muted/10"
+          }`}
+          data-ocid="shop-photo-dropzone"
+        >
+          <ImagePlus
+            className={`w-7 h-7 ${isDragOver ? "text-primary" : "text-muted-foreground"}`}
+          />
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">
+              Add listing photo
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Drag & drop or click · JPG / PNG · Max 5 MB
+            </p>
+          </div>
+        </button>
+      )}
+      {compressionInfo && !uploading && (
+        <p className="text-[10px] text-muted-foreground">
+          Original: {Math.round(compressionInfo.original / 1024)} KB →
+          Compressed: {Math.round(compressionInfo.compressed / 1024)} KB
+        </p>
+      )}
+      {error && (
+        <p
+          className="text-xs text-destructive flex items-center gap-1"
+          data-ocid="shop-photo-error"
+        >
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Category options for the manual Add For-Sale Item form
 const FOR_SALE_CATEGORIES = [
-  { label: "Seed", value: "Seed" },
-  { label: "Seedling ($6)", value: ProductCategory.Seedling },
-  { label: "1-Gallon Plant ($25)", value: ProductCategory.Gallon1 },
-  { label: "5-Gallon Plant ($45)", value: ProductCategory.Gallon5 },
-  { label: "Artisan Product / Spice", value: ProductCategory.Spice },
+  { label: "Seedling", value: ProductCategory.Seedling },
+  { label: "Gallon (1 gal)", value: ProductCategory.Gallon1 },
+  { label: "Gallon (5 gal)", value: ProductCategory.Gallon5 },
+  { label: "Spice", value: ProductCategory.Spice },
   { label: "Garden Inputs", value: ProductCategory.GardenInputs },
-  { label: "Membership NFT", value: "Membership" },
-  { label: "Other", value: "Other" },
 ] as const;
+
+const DESC_MAX = 500;
 
 function AddForSaleItemForm({
   createProduct,
@@ -815,26 +1226,29 @@ function AddForSaleItemForm({
 }) {
   const [fsName, setFsName] = useState("");
   const [fsDesc, setFsDesc] = useState("");
-  const [fsCategory, setFsCategory] = useState<string>(
+  const [fsCategory, setFsCategory] = useState<ProductCategory>(
     ProductCategory.Seedling,
   );
   const [fsPrice, setFsPrice] = useState("");
   const [fsStage, setFsStage] = useState("");
   const [fsQty, setFsQty] = useState("1");
+  const [fsImageKeys, setFsImageKeys] = useState<string[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fsName || !fsPrice) return;
     const qty = Number.parseInt(fsQty) || 1;
     const stageNote = fsStage ? ` · Stage/Size: ${fsStage}` : "";
-    const qtyNote = qty > 1 ? ` · Qty: ${qty}` : "";
+    const qtyNote = qty > 1 ? ` · Qty available: ${qty}` : "";
     try {
       await createProduct.mutateAsync({
         name: fsName,
         description: `${fsDesc}${stageNote}${qtyNote}`.trim(),
         price_cents: BigInt(Math.round(Number.parseFloat(fsPrice) * 100)),
-        category: fsCategory as ProductCategory,
+        category: fsCategory,
         variety: fsStage || undefined,
+        image_key: fsImageKeys[0] ?? undefined,
+        image_keys: fsImageKeys,
       });
       toast.success(`"${fsName}" added to shop!`);
       setFsName("");
@@ -842,6 +1256,7 @@ function AddForSaleItemForm({
       setFsPrice("");
       setFsStage("");
       setFsQty("1");
+      setFsImageKeys([]);
     } catch {
       toast.error("Failed to add item.");
     }
@@ -860,6 +1275,15 @@ function AddForSaleItemForm({
           Auto marked For Sale
         </span>
       </h3>
+
+      {/* Multi-image gallery upload */}
+      <div>
+        <Label className="text-xs">Listing Photos (up to 5, optional)</Label>
+        <div className="mt-1">
+          <GalleryUpload imageKeys={fsImageKeys} onChange={setFsImageKeys} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-xs">Item Name *</Label>
@@ -888,7 +1312,10 @@ function AddForSaleItemForm({
         </div>
         <div>
           <Label className="text-xs">Category</Label>
-          <Select value={fsCategory} onValueChange={setFsCategory}>
+          <Select
+            value={fsCategory}
+            onValueChange={(v) => setFsCategory(v as ProductCategory)}
+          >
             <SelectTrigger className="mt-1" data-ocid="admin-fs-category">
               <SelectValue />
             </SelectTrigger>
@@ -912,6 +1339,10 @@ function AddForSaleItemForm({
             className="mt-1 text-sm"
             data-ocid="admin-fs-qty"
           />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Quantity is recorded in the description (backend uses units-sold
+            tracking)
+          </p>
         </div>
         <div>
           <Label className="text-xs">Stage / Container Size (optional)</Label>
@@ -924,13 +1355,21 @@ function AddForSaleItemForm({
           />
         </div>
         <div className="col-span-2">
-          <Label className="text-xs">Description</Label>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs">Description *</Label>
+            <span
+              className={`text-[10px] ${fsDesc.length > DESC_MAX ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {fsDesc.length}/{DESC_MAX}
+            </span>
+          </div>
           <Textarea
             value={fsDesc}
-            onChange={(e) => setFsDesc(e.target.value)}
+            onChange={(e) => setFsDesc(e.target.value.slice(0, DESC_MAX))}
             placeholder="Describe this item for the storefront…"
-            className="mt-1 text-sm resize-none"
-            rows={2}
+            className="mt-0 text-sm resize-none"
+            rows={3}
+            required
             data-ocid="admin-fs-desc"
           />
         </div>
@@ -938,7 +1377,7 @@ function AddForSaleItemForm({
       <Button
         type="submit"
         size="sm"
-        disabled={createProduct.isPending || !fsName || !fsPrice}
+        disabled={createProduct.isPending || !fsName || !fsPrice || !fsDesc}
         className="bg-primary"
         data-ocid="admin-fs-submit-btn"
       >
@@ -949,8 +1388,414 @@ function AddForSaleItemForm({
   );
 }
 
+// ─── Bulk Upload Row Types ────────────────────────────────────────────────────
+
+interface BulkRow {
+  id: string;
+  name: string;
+  category: ProductCategory;
+  subcategory: string;
+  description: string;
+  quantity: string;
+  price: string;
+  errors: Record<string, string>;
+}
+
+const BULK_DRAFT_KEY = "ic-spicy-bulk-upload-draft";
+const MAX_BULK_ROWS = 20;
+
+function makeBulkRow(): BulkRow {
+  return {
+    id: `row-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: "",
+    category: ProductCategory.Seedling,
+    subcategory: "",
+    description: "",
+    quantity: "1",
+    price: "",
+    errors: {},
+  };
+}
+
+function BulkUploadPanel() {
+  const bulkCreate = useBulkCreateProducts();
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const savedDraft = (() => {
+    try {
+      const s = localStorage.getItem(BULK_DRAFT_KEY);
+      return s ? (JSON.parse(s) as BulkRow[]) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [rows, setRows] = useState<BulkRow[]>(savedDraft ?? [makeBulkRow()]);
+  const [submitResult, setSubmitResult] = useState<{
+    created: number;
+    total: number;
+    rowErrors: string[];
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const saveDraft = (updated: BulkRow[]) => {
+    localStorage.setItem(BULK_DRAFT_KEY, JSON.stringify(updated));
+    setRows(updated);
+  };
+
+  const updateRow = (id: string, field: keyof BulkRow, value: string) => {
+    saveDraft(
+      rows.map((r) =>
+        r.id === id
+          ? { ...r, [field]: value, errors: { ...r.errors, [field]: "" } }
+          : r,
+      ),
+    );
+  };
+
+  const addRow = () => {
+    if (rows.length >= MAX_BULK_ROWS) return;
+    saveDraft([...rows, makeBulkRow()]);
+  };
+
+  const removeRow = (id: string) => saveDraft(rows.filter((r) => r.id !== id));
+
+  const clearDraft = () => {
+    localStorage.removeItem(BULK_DRAFT_KEY);
+    setRows([makeBulkRow()]);
+    setSubmitResult(null);
+  };
+
+  const validateRows = (): boolean => {
+    let valid = true;
+    const updated = rows.map((r) => {
+      const errors: Record<string, string> = {};
+      if (!r.name.trim()) errors.name = "Required";
+      if (!r.price || Number.isNaN(Number.parseFloat(r.price)))
+        errors.price = "Required";
+      if (!r.category) errors.category = "Required";
+      if (Object.keys(errors).length) valid = false;
+      return { ...r, errors };
+    });
+    setRows(updated);
+    return valid;
+  };
+
+  const handleCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const parsed: BulkRow[] = [];
+      for (const line of lines.slice(1)) {
+        // skip header
+        const parts = line
+          .split(",")
+          .map((p) => p.trim().replace(/^"|"$/g, ""));
+        const [
+          name = "",
+          category = "",
+          subcategory = "",
+          description = "",
+          quantity = "1",
+          price = "",
+        ] = parts;
+        parsed.push({
+          id: `csv-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name,
+          category: (category as ProductCategory) || ProductCategory.Seedling,
+          subcategory,
+          description,
+          quantity: quantity || "1",
+          price,
+          errors: {},
+        });
+      }
+      if (parsed.length > 0) {
+        saveDraft(parsed.slice(0, MAX_BULK_ROWS));
+        toast.success(
+          `Imported ${parsed.length} rows from CSV. Review and submit.`,
+        );
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleBatchSubmit = async () => {
+    if (!validateRows()) {
+      toast.error("Fix highlighted errors before submitting.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const inputs = rows.map((r) => ({
+        name: r.name.trim(),
+        description:
+          `${r.description}${r.subcategory ? ` · ${r.subcategory}` : ""}${r.quantity !== "1" ? ` · Qty: ${r.quantity}` : ""}`.trim(),
+        price_cents: BigInt(Math.round(Number.parseFloat(r.price) * 100)),
+        category: r.category,
+        variety: r.subcategory || undefined,
+        image_key: undefined as string | undefined,
+        image_keys: [],
+      }));
+      const results = await bulkCreate.mutateAsync(inputs);
+      const created = results.filter((r) => "ok" in r).length;
+      const rowErrors = results
+        .map((r, i) =>
+          "err" in r
+            ? `Row ${i + 1} (${rows[i].name}): ${(r as { err: string }).err}`
+            : null,
+        )
+        .filter(Boolean) as string[];
+      setSubmitResult({ created, total: rows.length, rowErrors });
+      if (created > 0) {
+        toast.success(`${created} of ${rows.length} products created!`);
+        clearDraft();
+      } else {
+        toast.error("No products were created. Check errors below.");
+      }
+    } catch (err) {
+      toast.error(
+        `Batch failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="p-5 rounded-xl bg-card border border-border space-y-4"
+      data-ocid="admin-bulk-upload-panel"
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
+          <Shuffle className="w-4 h-4 text-primary" />
+          Bulk Upload
+          <Badge
+            variant="outline"
+            className="text-[10px] border-primary/40 text-primary"
+          >
+            {rows.length}/{MAX_BULK_ROWS} rows
+          </Badge>
+        </h3>
+        <div className="flex items-center gap-2">
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleCSV}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs border-border"
+            onClick={() => csvInputRef.current?.click()}
+            data-ocid="bulk-import-csv-btn"
+          >
+            <Upload className="w-3.5 h-3.5 mr-1" />
+            Import CSV
+          </Button>
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            data-ocid="bulk-clear-draft-btn"
+          >
+            Clear draft
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        CSV format:{" "}
+        <code className="text-primary/80">
+          name,category,subcategory,description,quantity,price
+        </code>{" "}
+        · Photos can be added to each listing after creation.
+      </p>
+
+      {/* Row table */}
+      <div className="space-y-3">
+        {rows.map((row, idx) => (
+          <div
+            key={row.id}
+            className="p-3 rounded-lg bg-muted/10 border border-border space-y-2"
+            data-ocid={`bulk-row.${idx + 1}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-muted-foreground w-6 flex-shrink-0">
+                {idx + 1}
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 flex-1">
+                <div>
+                  <Input
+                    value={row.name}
+                    onChange={(e) => updateRow(row.id, "name", e.target.value)}
+                    placeholder="Product name *"
+                    className={`text-xs h-8 ${row.errors.name ? "border-destructive" : ""}`}
+                    data-ocid={`bulk-name-${idx + 1}`}
+                  />
+                  {row.errors.name && (
+                    <p className="text-[10px] text-destructive mt-0.5">
+                      {row.errors.name}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Select
+                    value={row.category}
+                    onValueChange={(v) => updateRow(row.id, "category", v)}
+                  >
+                    <SelectTrigger
+                      className={`h-8 text-xs ${row.errors.category ? "border-destructive" : ""}`}
+                      data-ocid={`bulk-category-${idx + 1}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FOR_SALE_CATEGORIES.map(({ label, value }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Input
+                    value={row.subcategory}
+                    onChange={(e) =>
+                      updateRow(row.id, "subcategory", e.target.value)
+                    }
+                    placeholder="Subcategory / size"
+                    className="text-xs h-8"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Input
+                    value={row.description}
+                    onChange={(e) =>
+                      updateRow(row.id, "description", e.target.value)
+                    }
+                    placeholder="Description"
+                    className="text-xs h-8"
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={row.quantity}
+                    onChange={(e) =>
+                      updateRow(row.id, "quantity", e.target.value)
+                    }
+                    placeholder="Qty"
+                    className="text-xs h-8"
+                    data-ocid={`bulk-qty-${idx + 1}`}
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={row.price}
+                    onChange={(e) => updateRow(row.id, "price", e.target.value)}
+                    placeholder="Price USD *"
+                    className={`text-xs h-8 ${row.errors.price ? "border-destructive" : ""}`}
+                    data-ocid={`bulk-price-${idx + 1}`}
+                  />
+                  {row.errors.price && (
+                    <p className="text-[10px] text-destructive mt-0.5">
+                      {row.errors.price}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                  aria-label="Remove row"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add row / batch submit */}
+      <div className="flex items-center gap-3 flex-wrap pt-1">
+        {rows.length < MAX_BULK_ROWS && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs border-border"
+            onClick={addRow}
+            data-ocid="bulk-add-row-btn"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add Row
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          className="bg-primary h-8 text-xs"
+          onClick={handleBatchSubmit}
+          disabled={submitting || rows.every((r) => !r.name)}
+          data-ocid="bulk-submit-btn"
+        >
+          {submitting ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
+              Submitting…
+            </>
+          ) : (
+            <>
+              <Send className="w-3.5 h-3.5 mr-1" />
+              Batch Submit ({rows.length})
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Result feedback */}
+      {submitResult && (
+        <div
+          className={`p-3 rounded-lg border text-xs ${submitResult.created === submitResult.total ? "bg-primary/10 border-primary/30 text-primary" : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"}`}
+          data-ocid="bulk-submit-result"
+        >
+          <p className="font-semibold mb-1">
+            {submitResult.created} of {submitResult.total} products created
+          </p>
+          {submitResult.rowErrors.map((e) => (
+            <p key={e} className="text-destructive/80">
+              {e}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductsTab() {
-  const { data: products } = useProducts();
+  const {
+    data: products,
+    isPending: productsLoading,
+    isError: productsError,
+  } = useProducts();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -962,25 +1807,37 @@ function ProductsTab() {
     ProductCategory.Seedling,
   );
   const [variety, setVariety] = useState("");
+  const [imageKey, setImageKey] = useState<string | null>(null);
+  const [qty, setQty] = useState("1");
+  const storePhoto = useStorePhotoFile();
+
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [newPrice, setNewPrice] = useState("");
 
+  const isUploading = storePhoto.isPending;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !priceCents) return;
+    if (!name || !priceCents || isUploading) return;
+    const qtyNum = Number.parseInt(qty) || 1;
+    const qtyNote = qtyNum > 1 ? ` · Qty available: ${qtyNum}` : "";
     try {
       await createProduct.mutateAsync({
         name,
-        description,
+        description: `${description}${qtyNote}`.trim(),
         price_cents: BigInt(Math.round(Number.parseFloat(priceCents) * 100)),
         category,
-        variety: variety || undefined,
+        variety: variety && variety !== "__none__" ? variety : undefined,
+        image_key: imageKey ?? undefined,
+        image_keys: imageKey ? [imageKey] : [],
       });
       toast.success("Product created!");
       setName("");
       setDescription("");
       setPriceCents("");
       setVariety("");
+      setImageKey(null);
+      setQty("1");
     } catch {
       toast.error("Failed to create product.");
     }
@@ -1028,6 +1885,9 @@ function ProductsTab() {
       {/* ── Manual Add For-Sale Item (admin shortcut) ── */}
       <AddForSaleItemForm createProduct={createProduct} />
 
+      {/* ── Bulk Upload ── */}
+      <BulkUploadPanel />
+
       <form
         onSubmit={handleCreate}
         className="p-5 rounded-xl bg-card border border-border space-y-4"
@@ -1037,19 +1897,29 @@ function ProductsTab() {
           <Tag className="w-4 h-4 text-primary" />
           New Product (Internal Catalog Entry)
         </h3>
+
+        {/* Photo upload */}
+        <div>
+          <Label className="text-xs">Product Photo (optional)</Label>
+          <div className="mt-1">
+            <ShopPhotoUpload imageKey={imageKey} onChange={setImageKey} />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-xs">Name</Label>
+            <Label className="text-xs">Name *</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Apocalypse Scorpion Seedling"
               className="mt-1 text-sm"
+              required
               data-ocid="admin-product-name"
             />
           </div>
           <div>
-            <Label className="text-xs">Price ($)</Label>
+            <Label className="text-xs">Price ($) *</Label>
             <Input
               type="number"
               step="0.01"
@@ -1057,6 +1927,7 @@ function ProductsTab() {
               onChange={(e) => setPriceCents(e.target.value)}
               placeholder="6.00"
               className="mt-1 text-sm"
+              required
               data-ocid="admin-product-price"
             />
           </div>
@@ -1074,19 +1945,35 @@ function ProductsTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ProductCategory.Seedling}>
-                  Seedling ($6)
+                  Seedling
                 </SelectItem>
                 <SelectItem value={ProductCategory.Gallon1}>
-                  1-Gallon ($25)
+                  Gallon (1 gal)
                 </SelectItem>
                 <SelectItem value={ProductCategory.Gallon5}>
-                  5-Gallon ($45)
+                  Gallon (5 gal)
                 </SelectItem>
-                <SelectItem value={ProductCategory.Spice}>
-                  Spice/Salt ($12)
+                <SelectItem value={ProductCategory.Spice}>Spice</SelectItem>
+                <SelectItem value={ProductCategory.GardenInputs}>
+                  Garden Inputs
                 </SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Stock Quantity</Label>
+            <Input
+              type="number"
+              min="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              placeholder="1"
+              className="mt-1 text-sm"
+              data-ocid="admin-product-qty"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Recorded in description (informational)
+            </p>
           </div>
           <div>
             <Label className="text-xs">Variety (optional)</Label>
@@ -1095,7 +1982,7 @@ function ProductsTab() {
                 <SelectValue placeholder="Any variety" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— None —</SelectItem>
+                <SelectItem value="__none__">— None —</SelectItem>
                 {CHILI_VARIETIES.map((v) => (
                   <SelectItem key={v} value={v}>
                     {v}
@@ -1105,13 +1992,23 @@ function ProductsTab() {
             </Select>
           </div>
           <div className="col-span-2">
-            <Label className="text-xs">Description</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs">Description *</Label>
+              <span
+                className={`text-[10px] ${description.length > DESC_MAX ? "text-destructive" : "text-muted-foreground"}`}
+              >
+                {description.length}/{DESC_MAX}
+              </span>
+            </div>
             <Textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) =>
+                setDescription(e.target.value.slice(0, DESC_MAX))
+              }
               placeholder="Product description…"
-              className="mt-1 text-sm resize-none"
-              rows={2}
+              className="mt-0 text-sm resize-none"
+              rows={3}
+              required
               data-ocid="admin-product-desc"
             />
           </div>
@@ -1119,101 +2016,146 @@ function ProductsTab() {
         <Button
           type="submit"
           size="sm"
-          disabled={createProduct.isPending || !name || !priceCents}
+          disabled={
+            createProduct.isPending ||
+            isUploading ||
+            !name ||
+            !priceCents ||
+            !description
+          }
           className="bg-primary"
           data-ocid="admin-create-product-btn"
         >
           <Plus className="w-4 h-4" />
-          {createProduct.isPending ? "Creating…" : "Create Product"}
+          {isUploading
+            ? "Uploading photo…"
+            : createProduct.isPending
+              ? "Creating…"
+              : "Create Product"}
         </Button>
       </form>
 
       <div className="space-y-2" data-ocid="admin-product-list">
-        {products?.map((product) => (
+        {productsLoading && (
+          <div className="space-y-2" data-ocid="admin-products-loading_state">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            ))}
+          </div>
+        )}
+        {productsError && !productsLoading && (
           <div
-            key={product.id.toString()}
-            className={`p-4 rounded-xl bg-card border border-border ${!product.active ? "opacity-60" : ""}`}
+            className="flex items-center gap-2 text-destructive text-sm py-4 justify-center"
+            data-ocid="admin-products-error_state"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-medium text-foreground text-sm truncate">
-                  {product.name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {product.category}
-                  {product.variety ? ` · ${product.variety}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {editingPrice === product.id.toString() ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={newPrice}
-                      onChange={(e) => setNewPrice(e.target.value)}
-                      className="w-20 h-7 text-xs"
-                      autoFocus
-                      data-ocid="admin-edit-price-input"
-                    />
-                    <Button
-                      size="sm"
-                      className="h-7 px-2 text-xs bg-primary"
-                      onClick={() => handleSavePrice(product)}
-                      data-ocid="admin-save-price-btn"
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setEditingPrice(null)}
-                    >
-                      ✕
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingPrice(product.id.toString());
-                      setNewPrice(
-                        (Number(product.price_cents) / 100).toFixed(2),
-                      );
-                    }}
-                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
-                    data-ocid="admin-product-price-edit"
-                  >
-                    {formatCents(product.price_cents)}
-                  </button>
+            <AlertCircle className="w-4 h-4" />
+            Failed to load products. Please refresh the page.
+          </div>
+        )}
+        {!productsLoading &&
+          !productsError &&
+          products?.map((product) => (
+            <div
+              key={product.id.toString()}
+              className={`p-4 rounded-xl bg-card border border-border ${!product.active ? "opacity-60" : ""}`}
+            >
+              <div className="flex items-start gap-3">
+                {/* Product image thumbnail */}
+                {product.image_key && (
+                  <img
+                    src={`/api/object-storage/${product.image_key}`}
+                    alt={product.name}
+                    className="w-14 h-14 rounded-lg object-cover border border-border flex-shrink-0"
+                  />
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(product)}
-                  className={`text-xs px-2 py-1 rounded-md border transition-smooth ${product.active ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-muted text-muted-foreground border-border"}`}
-                  data-ocid="admin-product-toggle"
-                >
-                  {product.active ? "Active" : "Inactive"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(product.id)}
-                  className="text-destructive hover:text-destructive/80 transition-colors"
-                  aria-label="Delete product"
-                  data-ocid="admin-delete-product-btn"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground text-sm truncate">
+                        {product.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {product.category}
+                        {product.variety ? ` · ${product.variety}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {editingPrice === product.id.toString() ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={newPrice}
+                            onChange={(e) => setNewPrice(e.target.value)}
+                            className="w-20 h-7 text-xs"
+                            autoFocus
+                            data-ocid="admin-edit-price-input"
+                          />
+                          <Button
+                            size="sm"
+                            className="h-7 px-2 text-xs bg-primary"
+                            onClick={() => handleSavePrice(product)}
+                            data-ocid="admin-save-price-btn"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setEditingPrice(null)}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPrice(product.id.toString());
+                            setNewPrice(
+                              (Number(product.price_cents) / 100).toFixed(2),
+                            );
+                          }}
+                          className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                          data-ocid="admin-product-price-edit"
+                        >
+                          {formatCents(product.price_cents)}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(product)}
+                        className={`text-xs px-2 py-1 rounded-md border transition-smooth ${product.active ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-muted text-muted-foreground border-border"}`}
+                        data-ocid="admin-product-toggle"
+                      >
+                        {product.active ? "Active" : "Inactive"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(product.id)}
+                        className="text-destructive hover:text-destructive/80 transition-colors"
+                        aria-label="Delete product"
+                        data-ocid="admin-delete-product-btn"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {(!products || products.length === 0) && (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            No products yet.
-          </p>
-        )}
+          ))}
+        {!productsLoading &&
+          !productsError &&
+          (!products || products.length === 0) && (
+            <p
+              className="text-sm text-muted-foreground text-center py-6"
+              data-ocid="admin-products-empty_state"
+            >
+              No products yet.
+            </p>
+          )}
       </div>
     </div>
   );
@@ -4852,7 +5794,7 @@ function FoundersCollectionTab() {
   const handleMintAll = async () => {
     if (cards.length === 0) return;
     const ADMIN_PID =
-      "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae";
+      "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae"; // primary admin — fallback recipient for unminted cards
     const { Principal } = await import("@icp-sdk/core/principal");
 
     const entries: FoundersMintInput[] = cards.map((c) => {

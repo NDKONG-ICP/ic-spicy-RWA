@@ -42,6 +42,8 @@ import type {
   UpdateRecipeInput,
   UserRole,
 } from "../backend";
+import { useActorReady } from "./useActorReady";
+import { useAuth } from "./useAuth";
 
 function useBackendActor() {
   return useActor(createActor);
@@ -49,15 +51,53 @@ function useBackendActor() {
 
 // ─── Products ───────────────────────────────────────────────────────────────
 
+export function useBulkCreateProducts() {
+  const { actor } = useBackendActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (inputs: CreateProductInput[]) => {
+      if (!actor) throw new Error("Not connected");
+      // Call bulkCreateProducts if available, otherwise fall back to sequential createProduct
+      const a = actor as typeof actor & {
+        bulkCreateProducts?: (
+          inputs: CreateProductInput[],
+        ) => Promise<Array<{ ok: unknown } | { err: string }>>;
+      };
+      if (typeof a.bulkCreateProducts === "function") {
+        return a.bulkCreateProducts(inputs);
+      }
+      // Fallback: sequential
+      const results: Array<{ ok: unknown } | { err: string }> = [];
+      for (const input of inputs) {
+        try {
+          const ok = await actor.createProduct(input);
+          results.push({ ok });
+        } catch (e) {
+          results.push({
+            err: e instanceof Error ? e.message : "Unknown error",
+          });
+        }
+      }
+      return results;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["products"] }),
+  });
+}
+
 export function useProducts() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listProducts();
     },
-    enabled: !!actor && !isFetching,
+    // Use actorReady as the gate — same pattern as useProfile().
+    // The previous `!!actor && !isFetching` guard was blocking this query
+    // because isFetching stays true during actor initialization, causing the
+    // products list to never load in the admin panel.
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -124,26 +164,28 @@ export function useDeleteProduct() {
 // ─── Plants ─────────────────────────────────────────────────────────────────
 
 export function usePlants() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["plants"],
+    queryKey: ["plants", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listPlants();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
 export function useMyPlants() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["myPlants"],
+    queryKey: ["myPlants", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listMyPlants();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -398,14 +440,15 @@ export function useAddWeatherRecord() {
 // ─── Artwork Layers ──────────────────────────────────────────────────────────
 
 export function useArtworkLayers() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["artworkLayers"],
+    queryKey: ["artworkLayers", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listArtworkLayers();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -443,14 +486,15 @@ export function useMintRWAProvenance() {
 // ─── Trays ───────────────────────────────────────────────────────────────────
 
 export function useTrays() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["trays"],
+    queryKey: ["trays", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listTrays();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -512,14 +556,15 @@ export function useDeleteTray() {
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
 export function useMyOrders() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["myOrders"],
+    queryKey: ["myOrders", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listOrdersByBuyer();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -568,14 +613,15 @@ export function useUpdateOrderStatus() {
 // ─── DAO ─────────────────────────────────────────────────────────────────────
 
 export function useProposals() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["proposals"],
+    queryKey: ["proposals", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listDAOProposals();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -686,6 +732,7 @@ export function useCreateComment() {
 
 export function useFollowUser() {
   const { actor } = useBackendActor();
+  const { principal } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -695,21 +742,44 @@ export function useFollowUser() {
       if (!actor) throw new Error("Not connected");
       return following ? actor.unfollowUser(target) : actor.followUser(target);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
+    onSuccess: () => {
+      // Must use the principal-scoped key that matches useProfile's queryKey
+      const principalText = principal?.toText() ?? "anon";
+      qc.invalidateQueries({ queryKey: ["profile", principalText] });
+    },
   });
 }
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export function useProfile() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { principal, isAuthenticated } = useAuth();
+  const { actorReady } = useActorReady();
+  // Scope by principal so React Query never serves a stale profile from a
+  // prior session. Matches the pattern used by useIsAdmin to prevent the
+  // race condition where anonymous/old data is returned after sign-in.
+  const principalText = principal?.toText() ?? "anon";
+  const isAnon = !principal || principal.isAnonymous();
+
+  // CRITICAL (TanStack Query v5): we return `isPending` (not `isLoading`) so
+  // callers can correctly gate on "has this query returned data at least once".
+  // isPending=true until the first successful response — including the window
+  // between actorReady=true and the fetch completing where isLoading can be false.
   return useQuery({
-    queryKey: ["profile"],
+    queryKey: ["profile", principalText],
     queryFn: async () => {
-      if (!actor) return null;
+      if (!actor || isAnon || !isAuthenticated) return null;
       return actor.getCallerUserProfile();
     },
-    enabled: !!actor && !isFetching,
+    // SIMPLIFIED GATE: actorReady is the single reliable source of truth.
+    // ActorReadyProvider only sets actorReady=true AFTER a confirmed backend
+    // round-trip proves the actor is using the authenticated identity.
+    // For the admin, ensureAdminProfile() has already been called inside the
+    // probe before actorReady=true fires, so the profile exists on the backend.
+    enabled: actorReady,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 
@@ -727,27 +797,33 @@ export function useUserProfile(principal: Principal | undefined) {
 
 export function useSaveProfile() {
   const { actor } = useBackendActor();
+  const { principal } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: SaveProfileInput) => {
       if (!actor) throw new Error("Not connected");
       return actor.saveCallerUserProfile(input);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
+    onSuccess: () => {
+      // Must use the principal-scoped key that matches useProfile's queryKey
+      const principalText = principal?.toText() ?? "anon";
+      qc.invalidateQueries({ queryKey: ["profile", principalText] });
+    },
   });
 }
 
 // ─── Membership ──────────────────────────────────────────────────────────────
 
 export function useMembership() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["membership"],
+    queryKey: ["membership", actorReady],
     queryFn: async () => {
       if (!actor) return null;
       return actor.getCallerMembership();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -784,16 +860,100 @@ export function useIssueMembership() {
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
+// Hardcoded admin PIDs — single source of truth for admin access control.
+// All PIDs belong to the nursery owner (Internet Identity can assign different
+// PIDs across devices/browsers, and may include/exclude the trailing checksum).
+export const ADMIN_PIDS = new Set([
+  "lgjjr-4bwun-koggr-pornj-ltxia-m4xxo-iy7mg-cct7e-okxub-mbxku-tae",
+  "7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh",
+  "7qhp3-ojhp3-sjhf6-lnj6s-kqxyt-q4iaw-vtdxi-youle-zn666-4o5gh-qae",
+]);
+
+/**
+ * Checks if a principal text matches any known admin PID.
+ * Uses multiple strategies to handle whitespace, encoding, and case artifacts:
+ *   1. Exact match
+ *   2. Trimmed match (handles leading/trailing whitespace)
+ *   3. Lowercase + trimmed match (handles any case differences)
+ *   4. Prefix match — checks if the principal starts with a known PID base
+ *      (handles cases where II appends extra checksum segments)
+ */
+function checkIsAdminPid(raw: string): boolean {
+  if (!raw) return false;
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Strategy 1 & 2: exact and trimmed exact
+  if (ADMIN_PIDS.has(raw) || ADMIN_PIDS.has(trimmed)) return true;
+
+  // Strategy 3: case-insensitive
+  for (const pid of ADMIN_PIDS) {
+    if (pid.toLowerCase() === lower) return true;
+  }
+
+  // Strategy 4: prefix match — Internet Identity sometimes appends a checksum
+  // segment to the base PID (e.g., "abc-def" → "abc-def-ghi"). Check if the
+  // raw principal starts with any known admin PID.
+  for (const pid of ADMIN_PIDS) {
+    if (trimmed.startsWith(pid) || pid.startsWith(trimmed)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * useIsAdmin — SYNCHRONOUS. No TanStack Query, no async, no backend call.
+ *
+ * isAdmin is a pure derived value from the principal string. The PID is known
+ * the instant isAuthenticated=true. No backend round-trip is needed because
+ * admin status is determined solely by the hardcoded PID list.
+ *
+ * This eliminates ALL race conditions:
+ *   - No isPending/isLoading confusion
+ *   - No actorReady gate needed
+ *   - No query cache stale data
+ *   - No timing window where the query fires with anonymous context
+ *
+ * Callers receive { data: boolean, isPending: boolean, isFetching: false }
+ * matching the TanStack Query shape so call sites need no changes.
+ */
 export function useIsAdmin() {
-  const { actor, isFetching } = useBackendActor();
-  return useQuery({
-    queryKey: ["isAdmin"],
-    queryFn: async () => {
-      if (!actor) return false;
-      return actor.isCallerAdmin();
-    },
-    enabled: !!actor && !isFetching,
+  const { principal, isAuthenticated, isInitializing } = useAuth();
+  const principalText = principal?.toText() ?? "";
+
+  // isAdmin is true ONLY when authenticated AND the PID matches admin list.
+  // We use checkIsAdminPid() which applies trim/case/prefix normalization as
+  // a safety net against encoding artifacts from Internet Identity.
+  const isAdmin =
+    isAuthenticated && principalText !== ""
+      ? checkIsAdminPid(principalText)
+      : false;
+
+  // isPending is ONLY true while Internet Identity is still initializing.
+  // Once isInitializing=false, we have a definitive answer — no waiting needed.
+  const isPending = isInitializing;
+
+  // Always log — never gated on NODE_ENV so it's visible in preview builds too.
+  console.log("[useIsAdmin] principal check →", {
+    principalText,
+    principalTextLength: principalText.length,
+    principalCharCodes: principalText
+      .slice(0, 10)
+      .split("")
+      .map((c) => c.charCodeAt(0)),
+    isAuthenticated,
+    isInitializing,
+    isAdmin,
+    adminPidList: Array.from(ADMIN_PIDS),
+    exactMatch: ADMIN_PIDS.has(principalText),
+    trimmedMatch: ADMIN_PIDS.has(principalText.trim()),
   });
+
+  return {
+    data: isAdmin,
+    isPending,
+    isFetching: false,
+  };
 }
 
 export function useUserRole() {
@@ -1137,14 +1297,15 @@ export function useGetActiveResaleListings() {
 }
 
 export function useGetMyResaleListings() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["myResaleListings"],
+    queryKey: ["myResaleListings", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getMyResaleListings();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -1294,14 +1455,15 @@ export function useBatchMintFoundersCollection() {
 // ─── Token Prices (ICPSwap Oracle) ───────────────────────────────────────────
 
 export function useTokenPrices() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["tokenPrices"],
+    queryKey: ["tokenPrices", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getTokenPrices();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -1346,27 +1508,29 @@ export function useMembershipPrices() {
 // ─── Treasury ─────────────────────────────────────────────────────────────────
 
 export function useTreasuryBalances() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["treasuryBalances"],
+    queryKey: ["treasuryBalances", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getTreasuryBalances();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
     refetchInterval: 30_000,
   });
 }
 
 export function useTreasuryLedger() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["treasuryLedger"],
+    queryKey: ["treasuryLedger", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getTreasuryLedger();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
@@ -1630,28 +1794,30 @@ export function useFinalizeArtworkUpload() {
 }
 
 export function useListArtworkFiles() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["artworkFiles"],
+    queryKey: ["artworkFiles", actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listArtworkFiles();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 
 // ─── NFT Pool ─────────────────────────────────────────────────────────────────
 
 export function useGetPoolDashboard() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["poolDashboard"],
+    queryKey: ["poolDashboard", actorReady],
     queryFn: async () => {
       if (!actor) return null;
       return actor.getPoolDashboard();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
     refetchInterval: 15_000,
   });
 }
@@ -1660,14 +1826,15 @@ export function useListPoolNFTs(
   statusFilter: import("../backend").PoolNFTStatus | null,
   limit = 100,
 ) {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
   return useQuery({
-    queryKey: ["poolNFTs", JSON.stringify(statusFilter), limit],
+    queryKey: ["poolNFTs", JSON.stringify(statusFilter), limit, actorReady],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listPoolNFTs(statusFilter, BigInt(limit));
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && actorReady,
   });
 }
 

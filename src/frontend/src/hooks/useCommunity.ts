@@ -8,6 +8,8 @@ import type {
   PostId,
   SaveProfileInput,
 } from "../backend";
+import { useActorReady } from "./useActorReady";
+import { useAuth } from "./useAuth";
 
 function useBackendActor() {
   return useActor(createActor);
@@ -16,14 +18,22 @@ function useBackendActor() {
 // ─── Posts ────────────────────────────────────────────────────────────────────
 
 export function usePosts() {
-  const { actor, isFetching } = useBackendActor();
+  const { actor } = useBackendActor();
+  const { actorReady } = useActorReady();
+  const { isAuthenticated } = useAuth();
+
+  // Gate on actorReady when authenticated so posts don't fire against an
+  // anonymous context before the identity is confirmed. When not authenticated,
+  // listPosts() is a public query — allow it through once the actor exists.
+  const enabled = isAuthenticated ? actorReady && !!actor : !!actor;
+
   return useQuery({
     queryKey: ["posts"],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listPosts();
     },
-    enabled: !!actor && !isFetching,
+    enabled,
     refetchInterval: 30_000,
   });
 }
@@ -192,5 +202,32 @@ export function useSaveProfile() {
       return actor.saveCallerUserProfile(input);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
+  });
+}
+
+export function useEditPost() {
+  const { actor } = useBackendActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      newContent,
+    }: { postId: PostId; newContent: string }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.editPost(postId, newContent);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["posts"] }),
+  });
+}
+
+export function useDeletePost() {
+  const { actor } = useBackendActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: PostId) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.deletePost(postId);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["posts"] }),
   });
 }

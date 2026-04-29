@@ -198,11 +198,15 @@ export interface CreateProductInput {
     price_cents: bigint;
     description: string;
     inventory_category?: InventoryCategory;
+    image_keys: Array<string>;
     category: ProductCategory;
     variety?: string;
     plant_id?: PlantId;
 }
 export type ContainerSize = {
+    __kind__: "Gal5Bucket";
+    Gal5Bucket: null;
+} | {
     __kind__: "Gal1";
     Gal1: null;
 } | {
@@ -215,11 +219,51 @@ export type ContainerSize = {
     __kind__: "Oz16";
     Oz16: null;
 } | {
+    __kind__: "Gal7GrowBag";
+    Gal7GrowBag: null;
+} | {
+    __kind__: "Cell72";
+    Cell72: null;
+} | {
+    __kind__: "Pot4Inch";
+    Pot4Inch: null;
+} | {
     __kind__: "InGround";
     InGround: null;
 } | {
+    __kind__: "Pot6Inch";
+    Pot6Inch: null;
+} | {
+    __kind__: "Gal10GrowBag";
+    Gal10GrowBag: null;
+} | {
+    __kind__: "Gal1New";
+    Gal1New: null;
+} | {
+    __kind__: "Gal3New";
+    Gal3New: null;
+} | {
+    __kind__: "Gal7Pot";
+    Gal7Pot: null;
+} | {
+    __kind__: "Cell128";
+    Cell128: null;
+} | {
+    __kind__: "Gal15GrowBag";
+    Gal15GrowBag: null;
+} | {
+    __kind__: "Gal5GrowBag";
+    Gal5GrowBag: null;
+} | {
     __kind__: "Other";
     Other: string;
+};
+export type BulkCreateResult = {
+    __kind__: "ok";
+    ok: ProductPublic;
+} | {
+    __kind__: "err";
+    err: string;
 };
 export interface BatchGiftPackPublic {
     id: string;
@@ -250,6 +294,8 @@ export interface Offer {
 }
 export type FeedingId = bigint;
 export interface CreatePlantInput {
+    container_size?: ContainerSize;
+    date_purchased?: Timestamp;
     origin?: string;
     common_name?: string;
     source_plant_id?: PlantId;
@@ -336,6 +382,7 @@ export interface ProductPublic {
     price_cents: bigint;
     description: string;
     inventory_category?: InventoryCategory;
+    image_keys: Array<string>;
     category: ProductCategory;
     variety?: string;
     plant_id?: PlantId;
@@ -405,6 +452,7 @@ export interface UpdateProductInput {
     name?: string;
     price_cents?: bigint;
     description?: string;
+    image_keys?: Array<string>;
 }
 export interface UploadResult {
     layers_detected: bigint;
@@ -751,6 +799,7 @@ export interface backendInterface {
     }>;
     batchMintFoundersCollection(entries: Array<FoundersMintInput>): Promise<Array<FoundersMintResult>>;
     beginArtworkUpload(totalChunks: bigint): Promise<void>;
+    bulkCreateProducts(inputs: Array<CreateProductInput>): Promise<Array<BulkCreateResult>>;
     buyResaleListing(listing_id: string): Promise<{
         __kind__: "ok";
         ok: null;
@@ -784,9 +833,13 @@ export interface backendInterface {
     createRecipe(input: CreateRecipeInput): Promise<Recipe>;
     createTray(input: CreateTrayInput): Promise<TrayPublic>;
     dabTransform(input: TransformationInput): Promise<TransformationOutput>;
+    deletePost(post_id: PostId): Promise<void>;
     deleteProduct(product_id: ProductId): Promise<void>;
     deleteRecipe(id: RecipeId): Promise<boolean>;
     deleteTray(tray_id: TrayId): Promise<void>;
+    editPost(post_id: PostId, new_content: string): Promise<PostPublic>;
+    ensureAdminProfile(): Promise<void>;
+    ensureCallerProfile(): Promise<void>;
     finalizeArtworkUpload(): Promise<UploadResult>;
     followUser(target: Principal): Promise<void>;
     generateAllPoolNFTs(): Promise<bigint>;
@@ -794,6 +847,7 @@ export interface backendInterface {
     generatePickupQRPayload(plant_id: PlantId): Promise<string>;
     getActiveResaleListings(): Promise<Array<ResaleListingPublic>>;
     getAdminPrincipal(): Promise<string>;
+    getAdminPrincipals(): Promise<Array<string>>;
     getArtworkFile(path: string): Promise<Uint8Array | null>;
     getArtworkUploadResult(): Promise<UploadResult>;
     getArtworkUploadStatus(): Promise<UploadSessionStatus>;

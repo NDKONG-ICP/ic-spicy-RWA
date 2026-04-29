@@ -20,6 +20,8 @@ import {
   ArrowLeftRight,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock,
   Crown,
@@ -187,6 +189,15 @@ function getProductEmoji(category: string) {
   if (category === ProductCategory.Spice) return "🧂";
   if (category === ProductCategory.GardenInputs) return "🌿";
   return "🌶️";
+}
+
+// Get all image keys from a product, with backward-compat fallback
+function getProductImageKeys(product: Product): string[] {
+  // image_keys may not exist yet in bindings — check at runtime
+  const p = product as Product & { image_keys?: string[] };
+  if (p.image_keys && p.image_keys.length > 0) return p.image_keys;
+  if (product.image_key) return [product.image_key];
+  return [];
 }
 
 function formatTokenAmount(amount: bigint, symbol: OfferTokenSymbol): string {
@@ -1387,6 +1398,92 @@ function MembershipPricingCard({
   );
 }
 
+// ─── Product Image Gallery (carousel) ────────────────────────────────────────
+
+function ProductImageGallery({
+  imageKeys,
+  productName,
+  category,
+}: {
+  imageKeys: string[];
+  productName: string;
+  category: string;
+}) {
+  const [current, setCurrent] = useState(0);
+
+  if (imageKeys.length === 0) {
+    return (
+      <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-6xl mb-4">
+        {getProductEmoji(category)}
+      </div>
+    );
+  }
+
+  const prev = () => setCurrent((c) => Math.max(0, c - 1));
+  const next = () => setCurrent((c) => Math.min(imageKeys.length - 1, c + 1));
+
+  return (
+    <div className="mb-4 space-y-2">
+      {/* Main carousel */}
+      <div className="relative aspect-video rounded-lg overflow-hidden bg-secondary">
+        <img
+          src={`/api/object-storage/${imageKeys[current]}`}
+          alt={productName}
+          className="w-full h-full object-cover"
+        />
+        {imageKeys.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              disabled={current === 0}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-card/90 border border-border flex items-center justify-center text-foreground hover:bg-card transition-smooth disabled:opacity-30"
+              aria-label="Previous"
+              data-ocid="product-gallery-prev"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              disabled={current === imageKeys.length - 1}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-card/90 border border-border flex items-center justify-center text-foreground hover:bg-card transition-smooth disabled:opacity-30"
+              aria-label="Next"
+              data-ocid="product-gallery-next"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-card/80 border border-border text-xs text-foreground">
+              {current + 1} of {imageKeys.length}
+            </div>
+          </>
+        )}
+      </div>
+      {/* Thumbnail strip */}
+      {imageKeys.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {imageKeys.map((key, idx) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setCurrent(idx)}
+              className={`flex-shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-smooth ${idx === current ? "border-primary" : "border-border opacity-60 hover:opacity-100"}`}
+              aria-label={`View ${productName} ${idx + 1}`}
+              data-ocid={`product-thumb-${idx + 1}`}
+            >
+              <img
+                src={`/api/object-storage/${key}`}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Product Detail Modal ─────────────────────────────────────────────────────
 
 function ProductModal({
@@ -1400,6 +1497,7 @@ function ProductModal({
 }) {
   const addItem = useCart((s) => s.addItem);
   const [qty, setQty] = useState(1);
+  const imageKeys = getProductImageKeys(product);
 
   const handleAdd = () => {
     addItem({
@@ -1440,9 +1538,13 @@ function ProductModal({
           </div>
         </DialogHeader>
 
-        <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-6xl mb-4">
-          {getProductEmoji(product.category)}
-        </div>
+        {/* Gallery carousel */}
+        <ProductImageGallery
+          imageKeys={imageKeys}
+          productName={product.name}
+          category={product.category}
+        />
+
         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
           {product.description}
         </p>
@@ -1518,6 +1620,8 @@ function ProductCard({
   onSelect: () => void;
 }) {
   const addItem = useCart((s) => s.addItem);
+  const imageKeys = getProductImageKeys(product);
+  const firstImage = imageKeys[0];
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1546,7 +1650,20 @@ function ProductCard({
       data-ocid="product-card"
     >
       <div className="aspect-square bg-secondary flex items-center justify-center text-5xl relative overflow-hidden">
-        {getProductEmoji(product.category)}
+        {firstImage ? (
+          <img
+            src={`/api/object-storage/${firstImage}`}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          getProductEmoji(product.category)
+        )}
+        {imageKeys.length > 1 && (
+          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded-full bg-card/80 border border-border text-[10px] text-foreground">
+            +{imageKeys.length - 1}
+          </div>
+        )}
         <div className="absolute top-2 left-2">
           <StageBadge category={product.category} />
         </div>

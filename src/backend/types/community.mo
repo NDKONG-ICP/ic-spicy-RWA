@@ -6,7 +6,7 @@ module {
     id : Common.PostId;
     author : Principal;
     anonymous : Bool;
-    content : Text;
+    var content : Text;
     image_key : ?Text; // compressed image storage key
     likes : Set.Set<Principal>;
     created_at : Common.Timestamp;

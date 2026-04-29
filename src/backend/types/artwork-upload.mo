@@ -1,7 +1,10 @@
 import Common "common";
 
 module {
-  // A single stored artwork file (one layer image, stored on-chain as bytes)
+  // A single stored artwork file (one layer image, stored on-chain as bytes).
+  // Data is stored as [Nat8] — keeping as raw bytes avoids any [Nat8]→Blob
+  // conversion during canister upgrades, which was causing IC0539 Wasm memory
+  // overflow (1.9GB peak) when migrating large artwork collections.
   public type StoredFile = {
     path      : Text;       // e.g. "layer-1/background.png"
     layer     : Text;       // folder name e.g. "layer-1"
@@ -27,12 +30,18 @@ module {
     layer_summaries   : [LayerSummary];
   };
 
-  // In-progress upload session — accumulates chunks
+  // In-progress upload session.
+  // Uses a pre-allocated flat buffer written at byte offsets rather than
+  // accumulating a [[Nat8]] list — avoids heap overflow on large zips.
   public type UploadSession = {
-    var chunks        : [[Nat8]];  // chunks in order
-    var total_chunks  : Nat;
-    var received      : Nat;
-    started_at        : Common.Timestamp;
+    // Flat byte buffer pre-allocated to totalChunks * chunkSize bytes.
+    // Each receiveChunk call writes directly to the correct offset.
+    var buffer       : [var Nat8];
+    // Size of each chunk (set from the first chunk received).
+    var chunk_size   : Nat;
+    var total_chunks : Nat;
+    var received     : Nat;
+    started_at       : Common.Timestamp;
   };
 
   // Status of an in-progress session (public-facing, no data bytes)

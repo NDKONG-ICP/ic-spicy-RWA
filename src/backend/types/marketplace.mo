@@ -30,7 +30,8 @@ module {
     inventory_category : ?InventoryCategory; // set for NIMS-sourced items
     variety : ?Text;
     var active : Bool;
-    var image_key : ?Text;
+    var image_key : ?Text;       // legacy field — kept for backward compat
+    var image_keys : [Text];     // canonical multi-image field (0–5 entries)
     var plant_id : ?Common.PlantId; // linked NIMS plant when applicable
   };
 
@@ -44,6 +45,7 @@ module {
     variety : ?Text;
     active : Bool;
     image_key : ?Text;
+    image_keys : [Text];
     plant_id : ?Common.PlantId;
   };
 
@@ -54,7 +56,8 @@ module {
     category : ProductCategory;
     inventory_category : ?InventoryCategory;
     variety : ?Text;
-    image_key : ?Text;
+    image_key : ?Text;       // legacy single-image; ignored when image_keys is non-empty
+    image_keys : [Text];     // preferred multi-image (0–5)
     plant_id : ?Common.PlantId;
   };
 
@@ -65,6 +68,7 @@ module {
     price_cents : ?Nat;
     active : ?Bool;
     image_key : ?Text;
+    image_keys : ?[Text];    // when provided replaces the full image_keys array
   };
 
   public type OrderStatus = {
@@ -108,4 +112,6 @@ module {
     shipping_address : ?Text;
     pickup : Bool;
   };
+
+  public type BulkCreateResult = { #ok : ProductPublic; #err : Text };
 };

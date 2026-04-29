@@ -50,6 +50,8 @@ export interface BatchGiftPackPublic {
   'claim_token_id' : ClaimTokenId,
   'highest_rarity_pct' : bigint,
 }
+export type BulkCreateResult = { 'ok' : ProductPublic } |
+  { 'err' : string };
 export type ClaimTokenId = string;
 export interface ClaimTokenPublic {
   'id' : ClaimTokenId,
@@ -69,11 +71,23 @@ export interface CommentPublic {
   'author' : Principal,
   'author_username' : [] | [string],
 }
-export type ContainerSize = { 'Gal1' : null } |
+export type ContainerSize = { 'Gal5Bucket' : null } |
+  { 'Gal1' : null } |
   { 'Gal3' : null } |
   { 'Gal5' : null } |
   { 'Oz16' : null } |
+  { 'Gal7GrowBag' : null } |
+  { 'Cell72' : null } |
+  { 'Pot4Inch' : null } |
   { 'InGround' : null } |
+  { 'Pot6Inch' : null } |
+  { 'Gal10GrowBag' : null } |
+  { 'Gal1New' : null } |
+  { 'Gal3New' : null } |
+  { 'Gal7Pot' : null } |
+  { 'Cell128' : null } |
+  { 'Gal15GrowBag' : null } |
+  { 'Gal5GrowBag' : null } |
   { 'Other' : string };
 export interface CounterOfferInput {
   'counter_amount' : bigint,
@@ -87,6 +101,8 @@ export interface CreateOrderInput {
   'items' : Array<OrderItem>,
 }
 export interface CreatePlantInput {
+  'container_size' : [] | [ContainerSize],
+  'date_purchased' : [] | [Timestamp],
   'origin' : [] | [string],
   'common_name' : [] | [string],
   'source_plant_id' : [] | [PlantId],
@@ -113,6 +129,7 @@ export interface CreateProductInput {
   'price_cents' : bigint,
   'description' : string,
   'inventory_category' : [] | [InventoryCategory],
+  'image_keys' : Array<string>,
   'category' : ProductCategory,
   'variety' : [] | [string],
   'plant_id' : [] | [PlantId],
@@ -385,6 +402,7 @@ export interface ProductPublic {
   'price_cents' : bigint,
   'description' : string,
   'inventory_category' : [] | [InventoryCategory],
+  'image_keys' : Array<string>,
   'category' : ProductCategory,
   'variety' : [] | [string],
   'plant_id' : [] | [PlantId],
@@ -566,6 +584,7 @@ export interface UpdateProductInput {
   'name' : [] | [string],
   'price_cents' : [] | [bigint],
   'description' : [] | [string],
+  'image_keys' : [] | [Array<string>],
 }
 export interface UpdateRecipeInput {
   'id' : RecipeId,
@@ -675,6 +694,10 @@ export interface _SERVICE {
     Array<FoundersMintResult>
   >,
   'beginArtworkUpload' : ActorMethod<[bigint], undefined>,
+  'bulkCreateProducts' : ActorMethod<
+    [Array<CreateProductInput>],
+    Array<BulkCreateResult>
+  >,
   'buyResaleListing' : ActorMethod<
     [string],
     { 'ok' : null } |
@@ -702,9 +725,13 @@ export interface _SERVICE {
   'createRecipe' : ActorMethod<[CreateRecipeInput], Recipe>,
   'createTray' : ActorMethod<[CreateTrayInput], TrayPublic>,
   'dabTransform' : ActorMethod<[TransformationInput], TransformationOutput>,
+  'deletePost' : ActorMethod<[PostId], undefined>,
   'deleteProduct' : ActorMethod<[ProductId], undefined>,
   'deleteRecipe' : ActorMethod<[RecipeId], boolean>,
   'deleteTray' : ActorMethod<[TrayId], undefined>,
+  'editPost' : ActorMethod<[PostId, string], PostPublic>,
+  'ensureAdminProfile' : ActorMethod<[], undefined>,
+  'ensureCallerProfile' : ActorMethod<[], undefined>,
   'finalizeArtworkUpload' : ActorMethod<[], UploadResult>,
   'followUser' : ActorMethod<[Principal], undefined>,
   'generateAllPoolNFTs' : ActorMethod<[], bigint>,
@@ -712,6 +739,7 @@ export interface _SERVICE {
   'generatePickupQRPayload' : ActorMethod<[PlantId], string>,
   'getActiveResaleListings' : ActorMethod<[], Array<ResaleListingPublic>>,
   'getAdminPrincipal' : ActorMethod<[], string>,
+  'getAdminPrincipals' : ActorMethod<[], Array<string>>,
   'getArtworkFile' : ActorMethod<[string], [] | [Uint8Array]>,
   'getArtworkUploadResult' : ActorMethod<[], UploadResult>,
   'getArtworkUploadStatus' : ActorMethod<[], UploadSessionStatus>,

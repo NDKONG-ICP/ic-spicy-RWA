@@ -54,6 +54,7 @@ import {
 } from "../hooks/useBackend";
 import { ProvenanceModal } from "./NImsProvenanceModal";
 import {
+  CONTAINER_SIZE_OPTIONS,
   buildContainerSize,
   compressImage,
   containerSizeLabel,
@@ -71,14 +72,7 @@ interface CellModalProps {
   onSeedPlanted: (trayId: bigint, cell: number) => void;
 }
 
-const CONTAINER_OPTIONS = [
-  { value: "16oz", label: "16 oz" },
-  { value: "1gal", label: "1 Gallon" },
-  { value: "3gal", label: "3 Gallon" },
-  { value: "5gal", label: "5 Gallon" },
-  { value: "inground", label: "In Ground" },
-  { value: "other", label: "Other (specify)" },
-] as const;
+const CONTAINER_OPTIONS = CONTAINER_SIZE_OPTIONS;
 
 // ─── Upgrade History Timeline ─────────────────────────────────────────────────
 

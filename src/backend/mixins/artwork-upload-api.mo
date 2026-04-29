@@ -10,7 +10,7 @@ mixin (
   artworkUploadSession : Types.UploadSession,
   storedFiles   : Map.Map<Text, Types.StoredFile>,
   poolNFTs      : Map.Map<Nat, Types.PoolNFT>,
-  selfPrincipal : { var value : Text },
+  selfPrincipalText : () -> Text,
 ) {
 
   // ── Upload session ─────────────────────────────────────────────────────────
@@ -26,6 +26,8 @@ mixin (
 
   /// Admin: upload one chunk of the zip file.
   /// chunkIndex is 0-based; send chunks in order.
+  /// Chunks are written directly into a pre-allocated flat buffer to avoid
+  /// heap overflow on large collections (fixes IC0539 Wasm memory exceeded).
   public shared ({ caller }) func uploadArtworkChunk(
     chunkIndex  : Nat,
     totalChunks : Nat,
@@ -78,12 +80,12 @@ mixin (
     if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Admin only");
     };
-    ArtworkLib.buildUploadResult(selfPrincipal.value, storedFiles);
+    ArtworkLib.buildUploadResult(selfPrincipalText(), storedFiles);
   };
 
   /// Public query: get the artwork upload result without admin check (for display).
   public query func getArtworkUploadResult() : async Types.UploadResult {
-    ArtworkLib.buildUploadResult(selfPrincipal.value, storedFiles);
+    ArtworkLib.buildUploadResult(selfPrincipalText(), storedFiles);
   };
 
   /// Public query: list all stored artwork files (path + size, no data).
